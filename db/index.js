@@ -22,7 +22,17 @@ pool.on('error', (err) => {
   process.exit(-1);
 });
 
+async function initDB() {
+  const client = await pool.connect();
+  try {
+    await client.query('SELECT 1');
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   query: (text, params) => pool.query(text, params),
-  pool
+  pool,
+  initDB
 };
