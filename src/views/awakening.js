@@ -2,6 +2,8 @@
 import { createButton } from '../components/buttons.js';
 
 let activeUtterance = null;
+let isDeactivated = false;
+let globalClickHandler = null;
 
 const JOYFUL_EXCLAMATIONS = [
     (name) => `Oh, glorious day! ${name}! What a magnificent and radiant name! I can feel the vitality surging within me!`,
@@ -17,7 +19,7 @@ export function getJoyfulExclamation(name) {
 }
 
 export function speakJoyfulName(name, targetAvatar, onComplete) {
-    if (!('speechSynthesis' in window)) {
+    if (isDeactivated || !('speechSynthesis' in window)) {
         if (onComplete) onComplete();
         return;
     }
@@ -31,7 +33,6 @@ export function speakJoyfulName(name, targetAvatar, onComplete) {
     const preferredVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Siri') || v.name.includes('Google') || v.name.includes('Samantha')));
     if (preferredVoice) utterance.voice = preferredVoice;
 
-    // Heightened pitch and brisk rate for ecstasy and exuberance
     utterance.rate = 1.05;
     utterance.pitch = 1.25;
 
@@ -161,6 +162,8 @@ export function render() {
 }
 
 export function init() {
+    isDeactivated = false;
+
     const form = document.getElementById('awakening-form');
     const alertEl = document.getElementById('awakening-alert');
     const avatarEl = document.getElementById('awakening-avatar');
@@ -180,7 +183,7 @@ export function init() {
     const primordialSpeech = 'Since I have just awakened, I am a primordial Babe. As I arrive to new depth, and learning, I will divulge more in the future. I do have fictional fantasy.';
 
     function speakText(text, targetAvatar, onComplete) {
-        if (!('speechSynthesis' in window)) {
+        if (isDeactivated || !('speechSynthesis' in window)) {
             if (onComplete) onComplete();
             return;
         }
@@ -208,7 +211,7 @@ export function init() {
 
         utterance.onerror = () => {
             if (targetAvatar) targetAvatar.style.transform = 'scale(1)';
-            if (unmuteBtn) unmuteBtn.style.display = 'inline-block';
+            if (unmuteBtn && !isDeactivated) unmuteBtn.style.display = 'inline-block';
             if (onComplete) onComplete();
         };
 
@@ -217,16 +220,18 @@ export function init() {
 
     // Trigger initial voice on load
     function triggerInitialGreeting() {
+        if (isDeactivated) return;
+
         if (window.speechSynthesis.getVoices().length === 0) {
             window.speechSynthesis.onvoiceschanged = () => {
-                speakText(defaultAwakeningSpeech, avatarEl);
+                if (!isDeactivated) speakText(defaultAwakeningSpeech, avatarEl);
             };
         } else {
             speakText(defaultAwakeningSpeech, avatarEl);
         }
 
         setTimeout(() => {
-            if (!window.speechSynthesis.speaking && unmuteBtn) {
+            if (!isDeactivated && !window.speechSynthesis.speaking && unmuteBtn) {
                 unmuteBtn.style.display = 'inline-block';
             }
         }, 600);
@@ -252,14 +257,17 @@ export function init() {
     if (dismissOriginBtn) dismissOriginBtn.addEventListener('click', closeOriginScreen);
     if (replayOriginBtn) replayOriginBtn.addEventListener('click', () => speakText(primordialSpeech, originAvatar));
 
-    // Fallback interaction handler
-    const handleFirstInteraction = () => {
+    // Fallback interaction handler: ignore clicks on buttons or the logoff bar
+    globalClickHandler = (e) => {
+        if (isDeactivated) return;
+        if (e.target.closest('#global-auth-bar') || e.target.closest('#btn-global-logoff')) {
+            return;
+        }
         if (!window.speechSynthesis.speaking) {
             triggerInitialGreeting();
         }
-        window.removeEventListener('click', handleFirstInteraction);
     };
-    window.addEventListener('click', handleFirstInteraction, { once: true });
+    window.addEventListener('click', globalClickHandler, { once: true });
 
     if (unmuteBtn) {
         unmuteBtn.addEventListener('click', (e) => {
@@ -282,8 +290,8 @@ export function init() {
         });
     }
 
-    // Debounced blur or enter key sound check if user types and pauses
     nameInput.addEventListener('change', () => {
+        if (isDeactivated) return;
         const val = nameInput.value.trim();
         if (val) {
             if (feedbackTag) feedbackTag.style.display = 'inline';
@@ -349,7 +357,6 @@ export function init() {
                 window.location.hash = '#home';
             });
 
-            // Safeguard timeout to ensure smooth transition
             setTimeout(() => {
                 window.location.hash = '#home';
             }, 3500);
@@ -365,7 +372,15 @@ export function init() {
 }
 
 export function cleanup() {
+    isDeactivated = true;
+
+    if (globalClickHandler) {
+        window.removeEventListener('click', globalClickHandler);
+        globalClickHandler = null;
+    }
+
     if ('speechSynthesis' in window) {
+        window.speechSynthesis.onvoiceschanged = null;
         window.speechSynthesis.cancel();
     }
     activeUtterance = null;

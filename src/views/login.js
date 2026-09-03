@@ -17,7 +17,7 @@ export function render() {
                         <label id="auth-user-label" style="display: block; font-size: 0.8rem; color: #94a3b8; margin-bottom: 0.35rem;">Username or Email</label>
                         <input type="text" id="auth-username" required style="width: 100%; padding: 0.65rem; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #fff; box-sizing: border-box;">
                         <div id="username-helper" style="display: none; font-size: 0.75rem; color: #64748b; margin-top: 0.35rem;">
-                            3-30 characters. Letters, numbers, underscores (_), and hyphens (-) only.
+                            3-30 characters. Letters, numbers, underscores (_), and hyphens (-) only. (Not case sensitive)
                         </div>
                     </div>
 
@@ -28,7 +28,12 @@ export function render() {
 
                     <div>
                         <label style="display: block; font-size: 0.8rem; color: #94a3b8; margin-bottom: 0.35rem;">Password</label>
-                        <input type="password" id="auth-password" required style="width: 100%; padding: 0.65rem; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #fff; box-sizing: border-box;">
+                        <div style="position: relative; width: 100%;">
+                            <input type="password" id="auth-password" required style="width: 100%; padding: 0.65rem 2.6rem 0.65rem 0.65rem; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #fff; box-sizing: border-box;">
+                            <button type="button" id="toggle-auth-password" title="Show or hide password" style="position: absolute; right: 0.65rem; top: 50%; transform: translateY(-50%); background: transparent; border: none; cursor: pointer; color: #94a3b8; font-size: 1.1rem; line-height: 1; padding: 0.2rem;">
+                                👁️
+                            </button>
+                        </div>
                         
                         <ul id="password-checklist" style="display: none; font-size: 0.75rem; color: #64748b; margin-top: 0.5rem; padding-left: 0; list-style: none; flex-direction: column; gap: 0.25rem;">
                             <li id="req-len" data-text="Min 8 characters">○ Min 8 characters</li>
@@ -74,6 +79,7 @@ export function init() {
     const userHelper = document.getElementById('username-helper');
     const passChecklist = document.getElementById('password-checklist');
     const passInput = document.getElementById('auth-password');
+    const togglePassBtn = document.getElementById('toggle-auth-password');
     const emailGroup = document.getElementById('email-field-group');
     const emailInput = document.getElementById('auth-email');
     const agreementGroup = document.getElementById('agreement-checkbox-group');
@@ -84,6 +90,15 @@ export function init() {
     const alertEl = document.getElementById('auth-alert');
     const form = document.getElementById('auth-form');
     const viewTermsLink = document.getElementById('view-terms-link');
+
+    // Toggle password visibility
+    if (togglePassBtn && passInput) {
+        togglePassBtn.addEventListener('click', () => {
+            const isText = passInput.type === 'text';
+            passInput.type = isText ? 'password' : 'text';
+            togglePassBtn.innerText = isText ? '👁️' : '🙈';
+        });
+    }
 
     if (viewTermsLink) {
         viewTermsLink.addEventListener('click', (e) => {
@@ -164,21 +179,23 @@ export function init() {
         e.preventDefault();
         alertEl.style.display = 'none';
 
-        const username = document.getElementById('auth-username').value;
+        // Normalize username to lowercase and trim whitespace
+        const username = document.getElementById('auth-username').value.trim().toLowerCase();
         const password = document.getElementById('auth-password').value;
 
         if (isSignupMode) {
-            const email = emailInput.value;
+            // Normalize email to lowercase and trim
+            const email = emailInput.value.trim().toLowerCase();
             let errors = [];
 
             if (username.length < 3 || username.length > 30) {
                 errors.push('Username must be 3-30 characters long.');
             }
-            if (!/^[a-zA-Z0-9_-]+$/.test(username)) {
+            if (!/^[a-z0-9_-]+$/.test(username)) {
                 errors.push('Username can only contain letters, numbers, underscores, and hyphens.');
             }
 
-            const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+            const emailPattern = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/;
             if (!emailPattern.test(email)) {
                 errors.push('Please provide a valid email address.');
             }
@@ -244,8 +261,9 @@ export function init() {
                 localStorage.setItem('auth_token', data.token);
                 localStorage.setItem('auth_user', JSON.stringify(data.user));
                 
-                // Returning users proceed to home dashboard
-                window.location.hash = '#home';
+                // Return to previous route if recorded, otherwise default to #home
+                const returnRoute = localStorage.getItem('last_visited_route') || 'home';
+                window.location.hash = `#${returnRoute}`;
             } catch (err) {
                 showAlert('Server communication error.');
             }

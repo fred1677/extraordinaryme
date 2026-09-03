@@ -110,8 +110,14 @@ app.get('/api/auth/rules', async (req, res) => {
 app.post('/api/auth/signup', async (req, res) => {
     const { username, email, password, agreement_id } = req.body;
 
+    const normalizedUsername = (username || '').trim().toLowerCase();
+    const normalizedEmail = (email || '').trim().toLowerCase();
+
     const currentRules = await getActiveAuthRules();
-    const validationResult = validateCredentialsWithRules({ username, email, password }, currentRules);
+    const validationResult = validateCredentialsWithRules(
+        { username: normalizedUsername, email: normalizedEmail, password }, 
+        currentRules
+    );
     if (!validationResult.valid) {
         return res.status(400).json({ error: validationResult.error });
     }
@@ -121,18 +127,18 @@ app.post('/api/auth/signup', async (req, res) => {
     try {
         await client.query('BEGIN');
 
+        // Case-insensitive conflict verification
         const existing = await client.query(
-            'SELECT id FROM users WHERE email = $1 OR username = $2',
-            [email.toLowerCase().trim(), username.trim()]
+            'SELECT id FROM users WHERE LOWER(email) = $1 OR LOWER(username) = $2',
+            [normalizedEmail, normalizedUsername]
         );
         if (existing.rows.length > 0) {
             await client.query('ROLLBACK');
             return res.status(409).json({ error: 'Username or email already exists.' });
         }
 
-        // All public signups are standard users (no auto-admin elevation)
+        // All public signups are standard users
         const assignedRole = 'user';
-
         const passwordHash = await bcrypt.hash(password, 12);
 
         const userResult = await client.query(
@@ -141,7 +147,7 @@ app.post('/api/auth/signup', async (req, res) => {
             )
              VALUES ($1, $2, $3, $4, $5)
              RETURNING id, username, email, role, created_at`,
-            [username.trim(), email.toLowerCase().trim(), passwordHash, assignedRole, currentRules.policy_revision]
+            [normalizedUsername, normalizedEmail, passwordHash, assignedRole, currentRules.policy_revision]
         );
         const newUser = userResult.rows[0];
 
@@ -170,9 +176,12 @@ app.post('/api/auth/login', async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'Credentials required.' });
 
+    const normalizedIdentifier = username.trim().toLowerCase();
+
     try {
-        const query = 'SELECT * FROM users WHERE username = $1 OR email = $1 LIMIT 1';
-        const result = await pool.query(query, [username.toLowerCase().trim()]);
+        // Case-insensitive login match against username or email
+        const query = 'SELECT * FROM users WHERE LOWER(username) = $1 OR LOWER(email) = $1 LIMIT 1';
+        const result = await pool.query(query, [normalizedIdentifier]);
         const user = result.rows[0];
 
         if (!user) return res.status(401).json({ error: 'Invalid credentials.' });
@@ -368,8 +377,14 @@ app.put('/api/admin/auth/rules', authenticateToken, requireAdmin, async (req, re
 // Admin create user
 app.post('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
     const { username, email, password, role } = req.body;
+    const normalizedUsername = (username || '').trim().toLowerCase();
+    const normalizedEmail = (email || '').trim().toLowerCase();
+
     const currentRules = await getActiveAuthRules();
-    const validationResult = validateCredentialsWithRules({ username, email, password }, currentRules);
+    const validationResult = validateCredentialsWithRules(
+        { username: normalizedUsername, email: normalizedEmail, password }, 
+        currentRules
+    );
     if (!validationResult.valid) {
         return res.status(400).json({ error: validationResult.error });
     }
@@ -382,7 +397,7 @@ app.post('/api/admin/users', authenticateToken, requireAdmin, async (req, res) =
             `INSERT INTO users (username, email, password_hash, role, password_policy_revision)
              VALUES ($1, $2, $3, $4, $5)
              RETURNING id, username, email, role, is_active, created_at`,
-            [username.trim(), email.toLowerCase().trim(), passwordHash, role === 'admin' ? 'admin' : 'user', currentRules.policy_revision]
+            [normalizedUsername, normalizedEmail, passwordHash, role === 'admin' ? 'admin' : 'user', currentRules.policy_revision]
         );
         const newUser = result.rows[0];
         await client.query(`INSERT INTO user_profiles (user_id) VALUES ($1)`, [newUser.id]);
