@@ -1,0 +1,89 @@
+ExtraordinaryMe - Project Structure
+===================================
+
+├── backend
+│   ├── .env
+│   ├── Godmode.js
+│   ├── auto-doc.js
+│   ├── cloud-drive
+│   │   └── googledrive.js
+│   ├── createAdmin.js
+│   ├── db
+│   │   ├── bootstrap.js
+│   │   ├── db.js
+│   │   ├── db.js.bak
+│   │   ├── initSystemSettings.js
+│   │   ├── schema copy 2.sql
+│   │   ├── schema copy.sql
+│   │   ├── schema.sql
+│   │   └── systemdata.js
+│   ├── extraordinaryme.code.code-workspace
+│   ├── patch-db.js
+│   ├── routes
+│   │   └── storage.js
+│   ├── server.js
+│   ├── src
+│   │   └── modules
+│   │       ├── api
+│   │       │   ├── authRouter.js
+│   │       │   ├── helpRouter.js
+│   │       │   └── universalRouter.js
+│   │       ├── auth
+│   │       │   └── permissionGuard.js
+│   │       ├── system
+│   │       │   └── logger.js
+│   │       └── tao
+│   │           ├── current_live_schema.sql
+│   │           └── taoengine.js
+│   ├── storage
+│   │   └── host_3
+│   ├── test-db.js
+│   ├── test-drive.js
+│   ├── testStorage.js
+│   └── utils
+│       └── storageRouter.js
+├── drawer-system.js
+├── frontend
+│   ├── bootstrap.js
+│   ├── components
+│   │   ├── chatbox.js
+│   │   ├── drawer-system.js
+│   │   ├── help-engine.js
+│   │   ├── login.js
+│   │   ├── orb-controller.js
+│   │   ├── screensize.js
+│   │   ├── system-header.js
+│   │   ├── universe-canvas.js
+│   │   └── voiceManager.js
+│   ├── engines
+│   │   ├── chat-engine.js
+│   │   └── taoengine.js
+│   ├── getplatformsystemvalues.html
+│   ├── help
+│   │   ├── help-data.js
+│   │   └── help-main.js
+│   ├── home
+│   │   └── home-page.js
+│   ├── index.html
+│   ├── index.js
+│   ├── installation.js
+│   ├── main.js
+│   ├── screen-panels
+│   │   ├── home-screen.js
+│   │   ├── main-panel.js
+│   │   ├── onboarding-bigbang.js
+│   │   ├── onboarding-newuniverse.js
+│   │   └── onboarding.js
+│   └── yangyin.html
+├── home-screen.js
+├── package-lock.json
+├── package.json
+├── sandbox
+│   ├── sandbox.html
+│   └── sandbox.js
+├── sandbox.html
+├── scan_tree.js
+└── src
+    └── modules
+        └── system
+            └── logger.js

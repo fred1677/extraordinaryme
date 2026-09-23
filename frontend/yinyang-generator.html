@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TAO OS - Perfect Yin/Yang SVG</title>
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #ffffff;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background: #1e293b;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+        #svg-container {
+            margin-bottom: 30px;
+            filter: drop-shadow(0 10px 15px rgba(0,0,0,0.5));
+            background: #000; /* Contrast testing */
+            border-radius: 50%;
+        }
+        button {
+            background-color: #ffd700;
+            color: #000000;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: 1500;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        button:hover {
+            background-color: #e6c200;
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>TAO OS Dock Divider</h2>
+        
+        <div id="svg-container">
+            <svg id="tao-yin-yang" viewBox="0 0 100 100" width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+                
+                <!-- 1. Base Circle (Black Left Side) -->
+                <circle cx="50" cy="50" r="50" fill="#000000" />
+                
+                <!-- 2. Right Half (White Right Side) -->
+                <path d="M 50 0 A 50 50 0 0 1 50 100 Z" fill="#ffffff" />
+                
+                <!-- 3. Top Bulb (White pushing into Black) -->
+                <circle cx="50" cy="25" r="25" fill="#ffffff" />
+                
+                <!-- 4. Bottom Bulb (Black pushing into White) -->
+                <circle cx="50" cy="75" r="25" fill="#000000" />
+                
+                <!-- 5. Top Dot (Black inside White) -->
+                <circle cx="50" cy="25" r="8" fill="#000000" />
+                
+                <!-- 6. Bottom Dot (White inside Black) -->
+                <circle cx="50" cy="75" r="8" fill="#ffffff" />
+                
+                <!-- 7. Outer Ring (For crisp edges on dark backgrounds) -->
+                <circle cx="50" cy="50" r="49" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2" />
+                
+                <!-- 8. Golden "me" Text (Arial, 900 weight, massive 38px, dead center) -->
+                <text x="50" y="50" font-family="Arial, sans-serif" font-size="50" font-weight="900" fill="#ffd700" text-anchor="middle" dominant-baseline="central" letter-spacing="-1">me</text>
+                
+            </svg>
+        </div>
+
+        <button onclick="downloadSVG()">Download tao-yinyang-me.svg</button>
+    </div>
+
+    <script>
+        function downloadSVG() {
+            const svgElement = document.getElementById('tao-yin-yang');
+            const serializer = new XMLSerializer();
+            let source = serializer.serializeToString(svgElement);
+
+            if (!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)) {
+                source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+            }
+
+            const svgBlob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(svgBlob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'tao-yinyang-me.svg';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>

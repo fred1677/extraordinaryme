@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TAO Sandbox Environment</title>
+    <style>
+        /* Black void default to hide flashing before the Canvas loads */
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: #000000; overflow: hidden; }
+        #root { width: 100%; height: 100%; }
+        
+        /* Visual indicator so you don't confuse Sandbox with Production */
+        .sandbox-badge { 
+            position: absolute; top: 10px; right: 10px; background: #f59e0b; color: #000; 
+            padding: 4px 8px; font-family: monospace; font-size: 12px; font-weight: bold; 
+            border-radius: 4px; z-index: 9999; pointer-events: none; opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="sandbox-badge">SANDBOX 3001</div>
+    <div id="root"></div>
+    
+    <!-- We load the exact same bootloader you use in production -->
+    <script type="module" src="/frontend/main.js"></script>
+</body>
+</html>

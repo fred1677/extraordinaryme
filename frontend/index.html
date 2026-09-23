@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TAO OS</title>
+    <style>
+        /* The Master Void */
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #000000;
+            overflow: hidden;
+        }
+
+        /* ====================================================================
+           🚨 TEMPORARY SANDBOX CONSOLE (TO BE DELETED PRIOR TO PRODUCTION) 🚨
+           ==================================================================== */
+        #sandbox-console {
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            width: 450px;
+            max-height: 80vh; /* Keeps it strictly inside the screen */
+            background-color: rgba(10, 10, 10, 0.95);
+            border: 1px solid #00ff41;
+            color: #00ff41;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 13px;
+            padding: 15px;
+            overflow-y: auto; /* Enables the vertical scrollbar */
+            z-index: 999999;
+            box-shadow: 0 4px 20px rgba(0, 255, 65, 0.15);
+            pointer-events: auto; /* CRITICAL FIX: Allows you to use the scroll wheel */
+        }
+        
+        /* Customizing the scrollbar to match the sandbox theme */
+        #sandbox-console::-webkit-scrollbar { width: 8px; }
+        #sandbox-console::-webkit-scrollbar-track { background: rgba(0, 255, 65, 0.1); }
+        #sandbox-console::-webkit-scrollbar-thumb { background: #00ff41; border-radius: 4px; }
+
+        #sandbox-console h3 { 
+            margin-top: 0; 
+            color: #ffffff; 
+            border-bottom: 1px solid #00ff41; 
+            padding-bottom: 8px; 
+            font-size: 14px;
+        }
+        .log-entry { margin-bottom: 10px; line-height: 1.4; }
+        .log-highlight { color: #ffffff; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <!-- 🚨 TEMPORARY SANDBOX UI 🚨 -->
+    <div id="sandbox-console">
+        <h3>BOOT SEQUENCE TRACER</h3>
+        <div id="console-logs"></div>
+    </div>
+
+    <script>
+        // STEP 0: Render the void and setup the global sandbox logger
+        const consoleBox = document.getElementById('sandbox-console');
+        const logsContainer = document.getElementById('console-logs');
+        
+        window.sandboxLog = function(step, message, data = null) {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            let html = `<strong>[${step}]</strong> ${message}`;
+            
+            if (data) {
+                html += `<br><span class="log-highlight">${data}</span>`;
+            }
+            
+            entry.innerHTML = html;
+            logsContainer.appendChild(entry);
+            
+            // CRITICAL FIX: Scroll the outer window, not the inner div
+            consoleBox.scrollTop = consoleBox.scrollHeight;
+        };
+
+        window.sandboxLog("STEP 0", "index.html Blank screen render complete. Void established.");
+        window.sandboxLog("HANDOFF", "Invoking index.js bootloader...");
+    </script>
+
+    <!-- Invoke the master bootloader -->
+    <script type="module" src="./index.js"></script>
+</body>
+</html>

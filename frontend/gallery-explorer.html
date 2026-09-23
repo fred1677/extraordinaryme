@@ -1,0 +1,1424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TAO Gallery & Provider Explorer</title>
+  <style>
+    :root {
+      --bg: #070a12;
+      --panel-bg: #0f172a;
+      --card-bg: #1e293b;
+      --accent: #38bdf8;
+      --accent-hover: #0ea5e9;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --border: #334155;
+      --like-color: #f43f5e;
+      --keyless-badge: #065f46;
+      --keyless-text: #34d399;
+      --keyed-badge: #7c2d12;
+      --keyed-text: #fb923c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* LEFT SIDEBAR */
+    #sidebar-left {
+      width: 280px;
+      background: var(--panel-bg);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+    .sidebar-header {
+      padding: 16px 20px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      border-bottom: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.25);
+    }
+    #liked-list-pane {
+      flex: 1;
+      overflow-y: auto;
+      padding: 15px;
+    }
+    .liked-item-btn {
+      width: 100%;
+      text-align: left;
+      background: var(--card-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 10px;
+      cursor: pointer;
+      font-size: 0.88rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .liked-item-btn:hover, .liked-item-btn.active {
+      border-color: var(--accent);
+      background: #172554;
+    }
+
+    /* TOP NAVIGATION TABS */
+    .tab-bar {
+      display: flex;
+      gap: 12px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 14px;
+      margin-bottom: 20px;
+    }
+    .tab-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 8px 18px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.88rem;
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      background: var(--accent);
+      color: #000;
+      border-color: var(--accent);
+    }
+
+    /* CENTER MAIN CONTENT */
+    #main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      padding: 25px 30px;
+    }
+    .grid-container {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      margin-bottom: 15px;
+    }
+    .provider-card-wrapper {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+    }
+    .provider-card {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      cursor: pointer;
+      transition: border-color 0.2s, transform 0.15s;
+    }
+    .provider-card:hover {
+      border-color: var(--accent);
+    }
+    .provider-card.selected {
+      border-color: var(--accent);
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.2);
+      border-bottom-left-radius: 0;
+      border-bottom-right-radius: 0;
+    }
+    .provider-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .like-toggle {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1.35rem;
+      color: var(--border);
+      padding: 2px 6px;
+      transition: transform 0.15s, color 0.15s;
+    }
+    .like-toggle.liked { color: var(--like-color); }
+    .like-toggle:hover { transform: scale(1.25); }
+
+    .btn-more {
+      background: transparent;
+      border: 1px dashed var(--accent);
+      color: var(--accent);
+      padding: 10px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      width: 100%;
+      margin: 8px 0 20px 0;
+      transition: background 0.2s;
+    }
+    .btn-more:hover { background: rgba(56, 189, 248, 0.1); }
+
+    /* INLINE DRILLDOWN CONTAINER */
+    .inline-drilldown-panel {
+      background: #0b1120;
+      border: 1px solid var(--accent);
+      border-top: none;
+      border-bottom-left-radius: 10px;
+      border-bottom-right-radius: 10px;
+      padding: 18px;
+      animation: fadeIn 0.2s ease-in-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .breadcrumbs {
+      font-size: 0.85rem;
+      color: var(--accent);
+      margin-bottom: 12px;
+      font-weight: 500;
+    }
+    .category-chip-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .category-chip {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 6px 12px;
+      cursor: pointer;
+      font-size: 0.82rem;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .category-chip:hover, .category-chip.active {
+      border-color: var(--accent);
+      background: #1e3a8a;
+    }
+    .cascade-tier {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed #1e293b;
+    }
+    .tier-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .icon-gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .gallery-icon-thumb {
+      width: 72px;
+      height: 72px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      object-fit: cover;
+      cursor: pointer;
+      transition: transform 0.15s, border-color 0.15s;
+      background: #020617;
+    }
+    .gallery-icon-thumb:hover {
+      transform: scale(1.08);
+      border-color: var(--accent);
+    }
+    .gallery-icon-thumb.selected {
+      border: 2px solid var(--accent);
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+    }
+    .live-badge {
+      display: inline-block;
+      font-size: 0.65rem;
+      background: #065f46;
+      color: #34d399;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 700;
+      margin-left: 6px;
+    }
+
+    /* DIRECTORY TABLE */
+    #directory-view { display: none; }
+    .directory-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      margin-bottom: 15px;
+    }
+    .directory-table th {
+      text-align: left;
+      padding: 12px 10px;
+      border-bottom: 2px solid var(--border);
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      letter-spacing: 0.5px;
+    }
+    .directory-table td {
+      padding: 12px 10px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    .directory-row {
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .directory-row:hover {
+      background: #1e293b;
+    }
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+    .badge-keyless { background: var(--keyless-badge); color: var(--keyless-text); }
+    .badge-keyed { background: var(--keyed-badge); color: var(--keyed-text); }
+
+    /* RIGHT PREVIEW STAGE */
+    #right-preview {
+      width: 400px;
+      background: var(--panel-bg);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+      flex-shrink: 0;
+      overflow-y: auto;
+    }
+    .preview-placeholder {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin: auto 0;
+      text-align: center;
+    }
+    .preview-image-container {
+      position: relative;
+      width: 100%;
+      min-height: 220px;
+      background: #020617;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .preview-image {
+      width: 100%;
+      height: auto;
+      max-height: 250px;
+      object-fit: contain;
+      display: block;
+    }
+    .asset-stage-title-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .meta-tag-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .meta-tag {
+      background: #020617;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 0.75rem;
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .action-panel {
+      background: #0b1120;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      margin: 10px 0;
+    }
+    .btn-action-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .btn-action {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-align: center;
+      transition: border-color 0.2s, background 0.2s;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .btn-action:hover {
+      border-color: var(--accent);
+      background: #172554;
+    }
+    .btn-action-full {
+      grid-column: span 2;
+      background: #1e3a8a;
+      border-color: var(--accent);
+    }
+    .btn-action-full:hover { background: #2563eb; }
+    .btn-visit {
+      background: #0f766e;
+      border-color: #14b8a6;
+      color: #fff;
+    }
+    .btn-visit:hover {
+      background: #0d9488;
+    }
+    .usage-instruction-box {
+      background: #020617;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 0.75rem;
+      font-family: monospace;
+      color: #38bdf8;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    /* FULL IMAGE MODAL OVERLAY */
+    #full-image-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.95);
+      z-index: 1000;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    #full-image-modal.active {
+      display: flex;
+    }
+    .modal-return-btn {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background: #1e293b;
+      color: #fff;
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      padding: 10px 20px;
+      font-size: 0.95rem;
+      font-weight: bold;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: background 0.2s;
+    }
+    .modal-return-btn:hover {
+      background: #2563eb;
+    }
+    .modal-image {
+      max-width: 90vw;
+      max-height: 85vh;
+      object-fit: contain;
+      border-radius: 6px;
+      box-shadow: 0 0 30px rgba(0,0,0,0.8);
+    }
+    .modal-caption {
+      margin-top: 14px;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- LEFT PANE -->
+  <div id="sidebar-left">
+    <div class="sidebar-header">Liked Providers (❤️)</div>
+    <div id="liked-list-pane">
+      <div style="color: var(--text-muted); font-size: 0.85rem; padding: 10px;">
+        Click ❤️ on any provider to dock it here.
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER MAIN CONTENT -->
+  <div id="main-content">
+    <div class="tab-bar">
+      <button class="tab-btn active" id="tab-interactive" onclick="switchTab('interactive')">Interactive Catalog</button>
+      <button class="tab-btn" id="tab-directory" onclick="switchTab('directory')">All Providers Directory (30/page)</button>
+    </div>
+
+    <!-- 1. INTERACTIVE CATALOG TAB -->
+    <div id="catalog-view">
+      <h3 style="margin-top: 10px; color: var(--accent);">Keyless Providers</h3>
+      <div class="grid-container" id="keyless-container"></div>
+      <button class="btn-more" id="btn-more-keyless" onclick="loadMoreKeyless()">+ More Keyless Providers (Next 5)</button>
+
+      <h3 style="margin-top: 25px; color: #fb923c;">Free API Providers (Key Required)</h3>
+      <div class="grid-container" id="keyed-container"></div>
+      <button class="btn-more" id="btn-more-keyed" onclick="loadMoreKeyed()">+ More Free API Providers (Next 5)</button>
+    </div>
+
+    <!-- 2. FULL DIRECTORY TAB -->
+    <div id="directory-view">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h3 style="margin:0;">Open Public & Free API Directory</h3>
+        <span id="directory-counter" style="color:var(--text-muted); font-size:0.85rem;">Showing 30</span>
+      </div>
+      <p style="color:var(--text-muted); font-size:0.8rem; margin:0 0 14px 0;">Click on any row to open and inspect that provider in the interactive stage.</p>
+      <table class="directory-table">
+        <thead>
+          <tr>
+            <th>Provider / Institution</th>
+            <th>Type</th>
+            <th>Core Domain / Gallery Focus</th>
+            <th>Public Search Portal</th>
+          </tr>
+        </thead>
+        <tbody id="directory-table-body"></tbody>
+      </table>
+      <button class="btn-more" id="btn-more-directory" onclick="loadMoreDirectory()">+ More Providers (Next 30)</button>
+    </div>
+  </div>
+
+  <!-- RIGHT PREVIEW STAGE -->
+  <div id="right-preview">
+    <div class="sidebar-header" id="stage-main-title" style="width:100%; border:none; padding:0 0 12px 0;">
+      Selected Asset Stage
+    </div>
+    <div id="preview-body" class="preview-placeholder">
+      Click any provider or icon to inspect API usage, descriptions, file size, and transformations.
+    </div>
+  </div>
+
+  <!-- FULL IMAGE OVERLAY MODAL -->
+  <div id="full-image-modal">
+    <button class="modal-return-btn" onclick="closeFullImageModal()">
+      &larr; Return
+    </button>
+    <img id="modal-img-node" class="modal-image" src="" alt="Full Resolution View" />
+    <div id="modal-caption-node" class="modal-caption"></div>
+  </div>
+
+  <script>
+    // 1. INTERACTIVE PROVIDER REGISTRY (WITH VERIFIED PUBLIC SEARCH PORTALS)
+    const INTERACTIVE_PROVIDERS = [
+      {
+        id: 'artic',
+        name: 'Art Institute of Chicago',
+        type: 'keyless',
+        isLive: true,
+        pdCount: '~62,000+ public domain works',
+        siteUrl: 'https://www.artic.edu/collection',
+        desc: 'Over 62,000 public domain art pieces queried directly via IIIF JSON endpoints.',
+        usage: 'GET `https://api.artic.edu/api/v1/artworks/search?query[term][is_public_domain]=true&limit=10&page={page}&fields=id,title,image_id`\nImage: `https://www.artic.edu/iiif/2/{image_id}/full/400,/0/default.jpg`',
+        sampleImages: [
+          { title: 'A Sunday on La Grande Jatte', url: 'https://www.artic.edu/iiif/2/25c31d8d-21a4-9ea1-1d73-6a4ec4d977a5/full/400,/0/default.jpg' },
+          { title: 'The Bedroom (Van Gogh)', url: 'https://www.artic.edu/iiif/2/258525b6-764a-251f-5867-fa0de3580556/full/400,/0/default.jpg' },
+          { title: 'Water Lilies (Monet)', url: 'https://www.artic.edu/iiif/2/1a0846ef-2e06-d2e8-d636-96eb122bbff0/full/400,/0/default.jpg' },
+          { title: 'Paris Street; Rainy Day', url: 'https://www.artic.edu/iiif/2/3f08b350-934d-e9fb-0fb9-5c401aa99451/full/400,/0/default.jpg' }
+        ],
+        categories: [
+          { name: 'Impressionism & Modern', subs: [{ name: 'French Masters', isLiveQuery: 'Monet' }, { name: 'Post-Impressionism', isLiveQuery: 'Seurat' }] },
+          { name: 'Asian & Ancient Art', subs: [{ name: 'Japanese Woodblock', isLiveQuery: 'Hokusai' }, { name: 'Ancient Sculptures', isLiveQuery: 'sculpture' }] },
+          { name: 'American Art', subs: [{ name: 'Classic Americana', isLiveQuery: 'Hopper' }] }
+        ]
+      },
+      {
+        id: 'met',
+        name: 'The Metropolitan Museum of Art',
+        type: 'keyless',
+        pdCount: '~406,000+ open access masterworks',
+        siteUrl: 'https://www.metmuseum.org/art/collection',
+        desc: 'Over 406,000 CC0 masterworks with department-indexed galleries.',
+        usage: '1. GET `/public/collection/v1/search?departmentId={id}&hasImages=true&q=*`\n2. GET `/public/collection/v1/objects/{objectID}`\n3. Bind `primaryImageSmall`',
+        sampleImages: [
+          { title: 'Sunflower Still Life', url: 'https://images.metmuseum.org/CRDImages/ep/web-large/DP145920.jpg' },
+          { title: 'The Great Wave', url: 'https://images.metmuseum.org/CRDImages/as/web-large/DP130155.jpg' },
+          { title: 'Cloisters Cross', url: 'https://images.metmuseum.org/CRDImages/cl/web-large/DP226685.jpg' },
+          { title: 'Washington Crossing the Delaware', url: 'https://images.metmuseum.org/CRDImages/ep/web-large/DP-14286-093.jpg' }
+        ],
+        categories: [
+          { name: 'European Paintings', subs: [{ name: 'Renaissance', subs: [{ name: 'Italian Masters', icons: Array.from({ length: 15 }, (_, i) => ({ title: `Italian Master #${i + 1}`, url: 'https://images.metmuseum.org/CRDImages/ep/web-large/DP145920.jpg' })) }] }] },
+          { name: 'Asian Art', subs: [{ name: 'Woodblocks', icons: Array.from({ length: 12 }, (_, i) => ({ title: `Woodblock Print #${i + 1}`, url: 'https://images.metmuseum.org/CRDImages/as/web-large/DP130155.jpg' })) }] },
+          { name: 'Photographs', subs: [] },
+          { name: 'The Cloisters', subs: [] },
+          { name: 'Arms and Armor', subs: [] }
+        ]
+      },
+      {
+        id: 'nasa',
+        name: 'NASA Image Archive',
+        type: 'keyless',
+        pdCount: 'Hundreds of thousands of missions',
+        siteUrl: 'https://images.nasa.gov',
+        desc: 'Cosmic observations, planetary telemetry, and deep-space missions.',
+        usage: '1. GET `https://images-api.nasa.gov/search?q={query}&media_type=image`\n2. Read `items[i].links[0].href` directly.',
+        sampleImages: [
+          { title: 'Hubble Deep Field', url: 'https://images-assets.nasa.gov/image/PIA12348/PIA12348~thumb.jpg' },
+          { title: 'Mars Mastcam Panorama', url: 'https://images-assets.nasa.gov/image/PIA16225/PIA16225~thumb.jpg' },
+          { title: 'Earth from Orbit', url: 'https://images-assets.nasa.gov/image/as11-44-6552/as11-44-6552~thumb.jpg' }
+        ],
+        categories: [
+          { name: 'Deep Space Telescopes', subs: [{ name: 'Hubble Nebulae', icons: Array.from({ length: 12 }, (_, i) => ({ title: `Hubble Nebula #${i + 1}`, url: 'https://images-assets.nasa.gov/image/PIA12348/PIA12348~thumb.jpg' })) }] }
+        ]
+      },
+      {
+        id: 'cleveland',
+        name: 'Cleveland Museum of Art',
+        type: 'keyless',
+        pdCount: '~30,000+ public domain objects',
+        siteUrl: 'https://www.clevelandart.org/art/collection/search',
+        desc: 'CC0 Open Access API returning direct masterwork permalinks.',
+        usage: 'GET `https://openaccess-api.clevelandart.org/api/artworks/?has_image=1&limit=10`\nImage: `data[i].images.web.url`',
+        sampleImages: [
+          { title: 'Twilight in the Wilderness', url: 'https://images.metmuseum.org/CRDImages/ep/web-large/DP145920.jpg' },
+          { title: 'Armor Helmet', url: 'https://images.metmuseum.org/CRDImages/cl/web-large/DP226685.jpg' }
+        ],
+        categories: [
+          { name: 'Medieval & Arms', subs: [{ name: 'Helmets & Armor', icons: Array.from({ length: 10 }, (_, i) => ({ title: `Armor Relic #${i+1}`, url: 'https://images.metmuseum.org/CRDImages/cl/web-large/DP226685.jpg' })) }] }
+        ]
+      },
+      {
+        id: 'picsum',
+        name: 'Picsum Photos Engine',
+        type: 'keyless',
+        pdCount: 'Dynamic / Procedural stream',
+        siteUrl: 'https://picsum.photos',
+        desc: 'Deterministic parameterized placeholder and UI asset generator.',
+        usage: 'Direct markup: <img src="https://picsum.photos/seed/{name}/400/300" />',
+        sampleImages: [
+          { title: 'Picsum Architecture', url: 'https://picsum.photos/seed/tao_arch/400/300' },
+          { title: 'Picsum Wilderness', url: 'https://picsum.photos/seed/tao_wild/400/300' },
+          { title: 'Picsum Textures', url: 'https://picsum.photos/seed/tao_tex/400/300' }
+        ],
+        categories: [
+          { name: 'Curated Textures', subs: [{ name: 'Abstract Seeds', icons: Array.from({ length: 15 }, (_, i) => ({ title: `Asset #${i+1}`, url: `https://picsum.photos/seed/tao_${i}/200/200` })) }] }
+        ]
+      },
+      {
+        id: 'smithsonian',
+        name: 'Smithsonian Open Access',
+        type: 'keyless',
+        pdCount: '~4,500,000+ CC0 digital items',
+        siteUrl: 'https://www.si.edu/openaccess',
+        desc: 'Over 4.5 million CC0 digital artifacts, natural specimens, and historical prints.',
+        usage: 'GET `https://api.si.edu/openaccess/api/v1.0/search?q={term}&api_key=DEMO_KEY`',
+        sampleImages: [{ title: 'Smithsonian Archive Asset', url: 'https://images.metmuseum.org/CRDImages/as/web-large/DP130155.jpg' }],
+        categories: [{ name: 'Natural History', subs: [{ name: 'Specimens', icons: [] }] }]
+      },
+      {
+        id: 'wikimedia',
+        name: 'Wikimedia Commons',
+        type: 'keyless',
+        pdCount: '~100,000,000+ open media files',
+        siteUrl: 'https://commons.wikimedia.org',
+        desc: 'Global open repository of media files and historical photography.',
+        usage: 'Query MediaWiki API with `generator=search` and `prop=imageinfo`.',
+        sampleImages: [{ title: 'Mona Lisa Masterpiece', url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg/402px-Mona_Lisa%2C_by_Leonardo_da_Vinci%2C_from_C2RMF_retouched.jpg' }],
+        categories: [{ name: 'Open Heritage', subs: [{ name: 'Historic Architecture', icons: [] }] }]
+      },
+
+      // Free API Key Required
+      {
+        id: 'unsplash',
+        name: 'Unsplash Topics API',
+        type: 'keyed',
+        pdCount: '~3,000,000+ curated photos',
+        siteUrl: 'https://unsplash.com',
+        desc: 'Curated modern photography organized by slug topics.',
+        usage: 'Header: `Authorization: Client-ID {ACCESS_KEY}`\nGET `https://api.unsplash.com/topics/{topic_slug}/photos?per_page=10`',
+        sampleImages: [
+          { title: '3D Abstract Flow', url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400&q=80' },
+          { title: 'Minimalist Architecture', url: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?w=400&q=80' },
+          { title: 'Moody Foggy Forest', url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=400&q=80' }
+        ],
+        categories: [
+          { name: '3D Renders', subs: [{ name: 'Abstract Neon', icons: Array.from({ length: 15 }, (_, i) => ({ title: `3D Render #${i + 1}`, url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200&q=80' })) }] }
+        ]
+      },
+      {
+        id: 'pexels',
+        name: 'Pexels Curated API',
+        type: 'keyed',
+        pdCount: '~3,000,000+ curated stock images',
+        siteUrl: 'https://www.pexels.com',
+        desc: 'High-res stock photography searchable by curated collections.',
+        usage: 'Header: `Authorization: {API_KEY}`\nGET `https://api.pexels.com/v1/curated?per_page=10`',
+        sampleImages: [
+          { title: 'Night Cityscape', url: 'https://images.pexels.com/photos/3052361/pexels-photo-3052361.jpeg?auto=compress&cs=tinysrgb&w=400' },
+          { title: 'Ocean Waves', url: 'https://images.pexels.com/photos/1295138/pexels-photo-1295138.jpeg?auto=compress&cs=tinysrgb&w=400' }
+        ],
+        categories: [{ name: 'Urban & Tech', subs: [{ name: 'Cyberpunk Neon', icons: [] }] }]
+      },
+      {
+        id: 'pixabay',
+        name: 'Pixabay Vectors & Stock',
+        type: 'keyed',
+        pdCount: '~2,700,000+ CC0 vectors and photos',
+        siteUrl: 'https://pixabay.com',
+        desc: 'Over 2.7 million vectors, illustrations, and CC0 stock assets.',
+        usage: 'GET `https://pixabay.com/api/?key={KEY}&q=wallpaper&image_type=photo`',
+        sampleImages: [
+          { title: 'Cosmic Field', url: 'https://cdn.pixabay.com/photo/2016/11/29/05/45/astronomy-1867616_640.jpg' },
+          { title: 'Autumn Forest', url: 'https://cdn.pixabay.com/photo/2015/12/01/20/28/fall-1072821_640.jpg' }
+        ],
+        categories: [{ name: 'Vectors & Icons', subs: [{ name: 'Flat Badges', icons: [] }] }]
+      }
+    ];
+
+    // 2. COMPLETE DIRECTORY REGISTRY WITH DIRECT PUBLIC SEARCH LINKS
+    const FULL_DIRECTORY = [
+      // Page 1: Major Museums & Digital Commons (1 - 30)
+      { id: 'artic', name: 'Art Institute of Chicago', type: 'Keyless', domain: 'Impressionism, Modern, Classic Masterworks', siteUrl: 'https://www.artic.edu/collection' },
+      { id: 'met', name: 'The Metropolitan Museum of Art', type: 'Keyless', domain: 'Fine Art, Armor, Asian Relics, Photographs', siteUrl: 'https://www.metmuseum.org/art/collection' },
+      { id: 'nasa', name: 'NASA Image and Video Archive', type: 'Keyless', domain: 'Space Exploration, Planetary Rovers, Satellites', siteUrl: 'https://images.nasa.gov' },
+      { id: 'cleveland', name: 'Cleveland Museum of Art', type: 'Keyless', domain: 'Medieval Art, Armor, European Modernism', siteUrl: 'https://www.clevelandart.org/art/collection/search' },
+      { id: 'picsum', name: 'Picsum Photos', type: 'Keyless', domain: 'Instant Curated Stock & Deterministic Placeholders', siteUrl: 'https://picsum.photos' },
+      { id: 'smithsonian', name: 'Smithsonian Open Access', type: 'Keyless', domain: 'Natural History, Artifacts, Archival Prints', siteUrl: 'https://www.si.edu/openaccess' },
+      { id: 'wikimedia', name: 'Wikimedia Commons', type: 'Keyless', domain: 'Crowdsourced Global Public Domain Media', siteUrl: 'https://commons.wikimedia.org' },
+      { id: 'europeana', name: 'Europeana Heritage', type: 'Keyless', domain: 'Aggregated European Museum & Library Archives', siteUrl: 'https://www.europeana.eu' },
+      { id: 'rijks', name: 'Rijksmuseum Amsterdam', type: 'Keyless', domain: 'Dutch Masters, Rembrandt, Vermeer, Golden Age', siteUrl: 'https://www.rijksmuseum.nl/en/collection' },
+      { id: 'loc', name: 'Library of Congress', type: 'Keyless', domain: 'Historical Photography, Maps, Civil War Prints', siteUrl: 'https://www.loc.gov/pictures' },
+      { id: 'nga', name: 'National Gallery of Art (NGA)', type: 'Keyless', domain: 'American & European Public Domain Treasures', siteUrl: 'https://www.nga.gov/collection/collection-search.html' },
+      { id: 'vam', name: 'Victoria and Albert Museum', type: 'Keyless', domain: 'Decorative Arts, Fashion, Textiles, Ceramics', siteUrl: 'https://collections.vam.ac.uk' },
+      { id: 'bhl', name: 'Biodiversity Heritage Library', type: 'Keyless', domain: 'Botanical Studies, Vintage Biology Plates', siteUrl: 'https://www.biodiversitylibrary.org' },
+      { id: 'wellcome', name: 'Wellcome Collection', type: 'Keyless', domain: 'Medical History, Early Science Illustrations', siteUrl: 'https://wellcomecollection.org/works' },
+      { id: 'paris', name: 'Paris Musées Collections', type: 'Keyless', domain: '14 Municipal Museums of Paris Heritage Assets', siteUrl: 'https://www.parismuseescollections.paris.fr' },
+      { id: 'walters', name: 'Walters Art Museum', type: 'Keyless', domain: 'Illuminated Manuscripts, Ancient Artifacts', siteUrl: 'https://art.thewalters.org' },
+      { id: 'getty', name: 'J. Paul Getty Museum', type: 'Keyless', domain: 'Classical Antiquities, Renaissance Drawings', siteUrl: 'https://www.getty.edu/art/collection' },
+      { id: 'nypl', name: 'New York Public Library Digital', type: 'Keyless', domain: 'Historical Maps, Vintage Prints, Ephemera', siteUrl: 'https://digitalcollections.nypl.org' },
+      { id: 'cataas', name: 'Cataas (Cat as a Service)', type: 'Keyless', domain: 'Categorized Animal Photos & UI Avatars', siteUrl: 'https://cataas.com' },
+      { id: 'dogceo', name: 'Dog CEO API', type: 'Keyless', domain: 'Breed-Indexed Dog Photography Repositories', siteUrl: 'https://dog.ceo' },
+      { id: 'openlibrary', name: 'Open Library Covers', type: 'Keyless', domain: 'Historical Book Covers & Vintage Illustrations', siteUrl: 'https://openlibrary.org' },
+      { id: 'nara', name: 'National Archives (NARA)', type: 'Keyless', domain: 'US Historical Documents, Military Photography', siteUrl: 'https://catalog.archives.gov' },
+      { id: 'apod', name: 'NASA Astronomy Picture of Day', type: 'Keyless', domain: 'Daily High-Res Deep Sky Cosmic Exposures', siteUrl: 'https://apod.nasa.gov' },
+      { id: 'nps', name: 'National Park Service Digital', type: 'Keyless', domain: 'American Nature Landscapes, National Parks', siteUrl: 'https://www.nps.gov/media/multimedia-search.htm' },
+      { id: 'pdreview', name: 'Public Domain Review Archives', type: 'Keyless', domain: 'Curated Out-of-Copyright Vintage Curiosities', siteUrl: 'https://publicdomainreview.org' },
+      { id: 'britishlibrary', name: 'British Library Public Commons', type: 'Keyless', domain: 'Over 1 Million Digitized Antique Book Illustrations', siteUrl: 'https://www.flickr.com/photos/britishlibrary' },
+      { id: 'yale', name: 'Yale Center for British Art', type: 'Keyless', domain: 'British Paintings, Watercolors, Rare Manuscripts', siteUrl: 'https://britishart.yale.edu/collections' },
+      { id: 'harvardart', name: 'Harvard Art Museums (Collections)', type: 'Keyless', domain: 'Academic Antiquities and Curatorial Archives', siteUrl: 'https://harvardartmuseums.org/collections' },
+      { id: 'brooklyn', name: 'Brooklyn Museum Digital', type: 'Keyless', domain: 'American Modernism and African Art Collections', siteUrl: 'https://www.brooklynmuseum.org/opencollection' },
+      { id: 'statens', name: 'SMK – National Gallery of Denmark', type: 'Keyless', domain: 'Danish Golden Age and European Classics (CC0)', siteUrl: 'https://open.smk.dk' },
+
+      // Page 2: Modern Curated Stock & Visual APIs (31 - 60)
+      { id: 'unsplash', name: 'Unsplash Topics API', type: 'Free Key', domain: 'Modern Editorial & Wallpaper Photography', siteUrl: 'https://unsplash.com' },
+      { id: 'pexels', name: 'Pexels Curated API', type: 'Free Key', domain: 'High-Res Curated Lifestyle & Stock Photography', siteUrl: 'https://www.pexels.com' },
+      { id: 'pixabay', name: 'Pixabay Vectors & Photos', type: 'Free Key', domain: 'CC0 Vector Badges, Illustrations, Stock Photos', siteUrl: 'https://pixabay.com' },
+      { id: 'harvard', name: 'Harvard Art Museums API', type: 'Free Key', domain: 'Deep Historical Academic Fine Art Database', siteUrl: 'https://harvardartmuseums.org' },
+      { id: 'openverse', name: 'Openverse (formerly CC Search)', type: 'Free Key', domain: 'Multi-Platform Creative Commons Index (700M+)', siteUrl: 'https://openverse.org' },
+      { id: 'freepik', name: 'Freepik API', type: 'Free Key', domain: 'Modern Vector Icons, UI Packs, Illustrations', siteUrl: 'https://www.freepik.com' },
+      { id: 'giphy', name: 'Giphy API', type: 'Free Key', domain: 'Stickers, Micro-Animations, Animated UI Clips', siteUrl: 'https://giphy.com' },
+      { id: 'flickr', name: 'Flickr API (CC0 Filter)', type: 'Free Key', domain: 'Global Community Public Domain Photos', siteUrl: 'https://www.flickr.com/commons' },
+      { id: 'rawpixel', name: 'Rawpixel Public Domain', type: 'Free Key', domain: 'Restored Fine Art, Vintage Botanical Plates', siteUrl: 'https://www.rawpixel.com/category/53/public-domain' },
+      { id: 'stockcake', name: 'StockCake Public Domain', type: 'Free Key', domain: 'AI & Organic Public Domain High-Res Imagery', siteUrl: 'https://stockcake.com' },
+      { id: 'nounproject', name: 'Noun Project API', type: 'Free Key', domain: 'Minimalist Vector Icons and UI Glyphs', siteUrl: 'https://thenounproject.com' },
+      { id: 'mapbox', name: 'Mapbox Static Tiles', type: 'Free Key', domain: 'Satellite Earth Imagery and Geometric Vector Maps', siteUrl: 'https://www.mapbox.com' },
+      { id: 'iconfinder', name: 'Iconfinder API', type: 'Free Key', domain: 'Curated Icon Sets and UI Vector Elements', siteUrl: 'https://www.iconfinder.com' },
+      { id: 'dribbble', name: 'Dribbble API', type: 'Free Key', domain: 'UI Design Prototypes and Digital Concept Art', siteUrl: 'https://dribbble.com' },
+      { id: 'bexels', name: 'Bexels AI Public API', type: 'Free Key', domain: 'Curated Public License Renderings & Wallpapers', siteUrl: 'https://bexels.com' },
+      { id: 'artuk', name: 'Art UK Digital API', type: 'Free Key', domain: 'Public Artworks from Thousands of British Venues', siteUrl: 'https://artuk.org' },
+      { id: 'storyblocks', name: 'Storyblocks Open API', type: 'Free Key', domain: 'Free Tier Stock Visuals and Digital Backdrops', siteUrl: 'https://www.storyblocks.com' },
+      { id: 'vecteezy', name: 'Vecteezy API', type: 'Free Key', domain: 'Vector Illustrations, Patterns, and UI Backdrops', siteUrl: 'https://www.vecteezy.com' },
+      { id: 'burst', name: 'Burst by Shopify API', type: 'Free Key', domain: 'Commercial Photography for Web Design & E-com', siteUrl: 'https://burst.shopify.com' },
+      { id: 'reshot', name: 'Reshot Free Stock', type: 'Free Key', domain: 'Unique Handpicked Vector Icons & Illustrations', siteUrl: 'https://www.reshot.com' },
+      { id: 'shutterstock', name: 'Shutterstock Open Developer', type: 'Free Key', domain: 'Sandbox Stock Photography & Asset Previews', siteUrl: 'https://www.shutterstock.com' },
+      { id: 'marstelemetry', name: 'NASA Mars Telemetry API', type: 'Free Key', domain: 'Raw Mars Rover Sol-Indexed Photographic Feeds', siteUrl: 'https://mars.nasa.gov/msl/multimedia/raw-images/' },
+      { id: 'nasaepic', name: 'NASA Earth Observatory (EPIC)', type: 'Free Key', domain: 'DSCOVR Daily Full Disc Satellite Earth Imagery', siteUrl: 'https://epic.gsfc.nasa.gov' },
+      { id: 'gettydev', name: 'Getty Images Developer Tier', type: 'Free Key', domain: 'Editorial Photography Previews & Wire Images', siteUrl: 'https://www.gettyimages.com' },
+      { id: 'smugmug', name: 'SmugMug Open API', type: 'Free Key', domain: 'Independent Photography Showcases & Galleries', siteUrl: 'https://www.smugmug.com' },
+      { id: 'fiftypexels', name: 'FiftyPixels Open API', type: 'Free Key', domain: 'Modern Free High-Res Creative Stock Images', siteUrl: 'https://fiftypexels.com' },
+      { id: 'kaboompics', name: 'Kaboompics Stock API', type: 'Free Key', domain: 'Interior Design, Color Palettes & Textures', siteUrl: 'https://kaboompics.com' },
+      { id: 'foodiesfeed', name: 'Foodiesfeed API', type: 'Free Key', domain: 'Public Domain Culinary & Food Photography', siteUrl: 'https://www.foodiesfeed.com' },
+      { id: 'gratisography', name: 'Gratisography Free Tier', type: 'Free Key', domain: 'Whimsical, Quirky and High-Contrast Photography', siteUrl: 'https://gratisography.com' },
+      { id: 'splitshire', name: 'SplitShire Open API', type: 'Free Key', domain: 'Free Stock Photos by Daniel Nanescu', siteUrl: 'https://www.splitshire.com' },
+
+      // Page 3: Specialized Heritage, Scientific & Regional Repositories (61 - 90)
+      { id: 'rijksstudio', name: 'Rijksstudio High-Res Master API', type: 'Free Key', domain: 'Ultra High-Res Dutch Masterworks & Details', siteUrl: 'https://www.rijksmuseum.nl/en/rijksstudio' },
+      { id: 'tate', name: 'Tate Collection Digital API', type: 'Keyless', domain: 'British Art and Modern International Collections', siteUrl: 'https://www.tate.org.uk/art' },
+      { id: 'moma', name: 'MoMA Open Data Project', type: 'Keyless', domain: 'Modern Art Catalogs, Design & Architecture', siteUrl: 'https://www.moma.org/collection' },
+      { id: 'cooperhewitt', name: 'Cooper Hewitt Smithsonian Design Museum', type: 'Free Key', domain: 'Historic Textiles, Industrial Design, Pattern Books', siteUrl: 'https://collection.cooperhewitt.org' },
+      { id: 'biodivflickr', name: 'Biodiversity Heritage Flickr Commons', type: 'Keyless', domain: 'Over 2 Million Antique Flora and Fauna Plates', siteUrl: 'https://www.flickr.com/photos/biodivlibrary' },
+      { id: 'finna', name: 'Finna.fi Open Cultural API', type: 'Keyless', domain: 'Finnish Museums, Archives, and Nordic Photography', siteUrl: 'https://www.finna.fi' },
+      { id: 'digitalt', name: 'DigitaltMuseum (Nordic Heritage)', type: 'Free Key', domain: 'Over 6 Million Swedish and Norwegian Artifacts', siteUrl: 'https://digitaltmuseum.org' },
+      { id: 'trove', name: 'National Library of Australia (Trove)', type: 'Free Key', domain: 'Australasian History, Digitized Newspapers, Maps', siteUrl: 'https://trove.nla.gov.au' },
+      { id: 'dpla', name: 'Digital Public Library of America (DPLA)', type: 'Free Key', domain: 'Unified Index of 45+ Million US Cultural Items', siteUrl: 'https://dp.la' },
+      { id: 'usgs', name: 'USGS Earth Explorer API', type: 'Keyless', domain: 'Landsat Satellite Imagery & Aerial Photography', siteUrl: 'https://earthexplorer.usgs.gov' },
+      { id: 'esa', name: 'European Space Agency Open Image API', type: 'Keyless', domain: 'Sentinel Satellites, Space Science & Rockets', siteUrl: 'https://www.esa.int/ESA_Multimedia/Images' },
+      { id: 'noaa', name: 'NOAA Photo Library', type: 'Keyless', domain: 'Oceanic Research, Marine Sanctuaries, Weather', siteUrl: 'https://photolib.noaa.gov' },
+      { id: 'usda', name: 'USDA Pomological Watercolor Collection', type: 'Keyless', domain: 'Vintage Fruit and Botanical Watercolor Studies', siteUrl: 'https://usdawatercolors.nal.usda.gov' },
+      { id: 'calisphere', name: 'Calisphere Digital Collections', type: 'Keyless', domain: 'California Historical Images & University Archives', siteUrl: 'https://calisphere.org' },
+      { id: 'dpnl', name: 'National Library of the Netherlands (KB)', type: 'Keyless', domain: 'Digitized Medieval Manuscripts & Dutch History', siteUrl: 'https://www.kb.nl/en' },
+      { id: 'bavarian', name: 'Bavarian State Library Digital (MDZ)', type: 'Keyless', domain: 'European Incunabula & Rare Medieval Manuscripts', siteUrl: 'https://www.digitale-sammlungen.de' },
+      { id: 'slub', name: 'SLUB Dresden Digital Collections', type: 'Keyless', domain: 'German Classical Manuscripts, Architectural Plans', siteUrl: 'https://digital.slub-dresden.de' },
+      { id: 'unspashsource', name: 'Unsplash Instant Embed Service', type: 'Keyless', domain: 'Keyword-Driven Instant Responsive Web Images', siteUrl: 'https://unsplash.com' },
+      { id: 'placekitten', name: 'PlaceKitten Image Engine', type: 'Keyless', domain: 'Responsive Dimension-Based Animal Placeholders', siteUrl: 'https://placekitten.com' },
+      { id: 'placebear', name: 'PlaceBear Image Engine', type: 'Keyless', domain: 'Nature & Wildlife Parameterized Assets', siteUrl: 'https://placebear.com' },
+      { id: 'loremflickr', name: 'LoremFlickr Keyless Engine', type: 'Keyless', domain: 'Category-Based Dynamic Creative Commons Placeholders', siteUrl: 'https://loremflickr.com' },
+      { id: 'archdaily', name: 'Open Architecture Photography Archive', type: 'Keyless', domain: 'Public License Modern Architectural Shots', siteUrl: 'https://www.archdaily.com' },
+      { id: 'metpubliccsv', name: 'The Met Bulk Open Data Registry', type: 'Keyless', domain: 'Direct GitHub Catalog for 490k+ Art Records', siteUrl: 'https://github.com/metmuseum/openaccess' },
+      { id: 'rijksopendata', name: 'Rijksmuseum Open Data Dump', type: 'Keyless', domain: 'Structured Masterwork Linked Open Data (RDF/JSON)', siteUrl: 'https://data.rijksmuseum.nl' },
+      { id: 'tateopendata', name: 'Tate Gallery GitHub Archive', type: 'Keyless', domain: '70,000 Artworks Metadata & Image URLs', siteUrl: 'https://github.com/tategallery/collection' },
+      { id: 'carnegie', name: 'Carnegie Museum of Art API', type: 'Keyless', domain: 'Contemporary Art and Hall of Architecture Assets', siteUrl: 'https://cmoa.org/art/collection' },
+      { id: 'whitney', name: 'Whitney Museum Open Data', type: 'Keyless', domain: '20th & 21st Century American Fine Art', siteUrl: 'https://whitney.org/collection' },
+      { id: 'bma', name: 'Baltimore Museum of Art Digital', type: 'Keyless', domain: 'Matisse Collection and 19th Century French Works', siteUrl: 'https://artbma.org/collection' },
+      { id: 'philamuseum', name: 'Philadelphia Museum of Art Archives', type: 'Keyless', domain: 'Duchamp, Renaissance and Asian Art Collections', siteUrl: 'https://www.philamuseum.org/collection' },
+      { id: 'lacma', name: 'LACMA Collections Online (Public Domain)', type: 'Keyless', domain: 'Over 20,000 High-Res Public Domain Art Images', siteUrl: 'https://collections.lacma.org' }
+    ];
+
+    // State
+    const likedProviderIds = new Set();
+    const likedAssetUrls = new Set();
+    let keylessLimit = 5;
+    let keyedLimit = 5;
+    let directoryOffset = 0;
+    const DIRECTORY_PAGE_SIZE = 30;
+
+    let activeProvider = null;
+    let activeSelectedAsset = null;
+    let primaryCategoryOffset = 0;
+    const CHUNK_SIZE = 5;
+    let activeBreadcrumbTrail = [];
+
+    let activeIconPool = [];
+    let iconOffset = 0;
+    let activeLiveQuery = null;
+    let livePage = 1;
+    const ICONS_PER_PAGE = 10;
+
+    // DOM Elements
+    const keylessContainer = document.getElementById('keyless-container');
+    const keyedContainer = document.getElementById('keyed-container');
+    const likedPane = document.getElementById('liked-list-pane');
+    const previewBody = document.getElementById('preview-body');
+    const stageMainTitle = document.getElementById('stage-main-title');
+    const fullImageModal = document.getElementById('full-image-modal');
+    const modalImgNode = document.getElementById('modal-img-node');
+    const modalCaptionNode = document.getElementById('modal-caption-node');
+
+    window.switchTab = function(tab) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      if (tab === 'interactive') {
+        document.getElementById('tab-interactive').classList.add('active');
+        document.getElementById('catalog-view').style.display = 'block';
+        document.getElementById('directory-view').style.display = 'none';
+      } else {
+        document.getElementById('tab-directory').classList.add('active');
+        document.getElementById('catalog-view').style.display = 'none';
+        document.getElementById('directory-view').style.display = 'block';
+        if (directoryOffset === 0) renderDirectoryChunk();
+      }
+    };
+
+    function renderCatalog() {
+      const keyless = INTERACTIVE_PROVIDERS.filter(p => p.type === 'keyless');
+      const keyed = INTERACTIVE_PROVIDERS.filter(p => p.type === 'keyed');
+
+      keylessContainer.innerHTML = '';
+      keyless.slice(0, keylessLimit).forEach(p => keylessContainer.appendChild(createProviderCard(p)));
+      document.getElementById('btn-more-keyless').style.display = keylessLimit >= keyless.length ? 'none' : 'block';
+
+      keyedContainer.innerHTML = '';
+      keyed.slice(0, keyedLimit).forEach(p => keyedContainer.appendChild(createProviderCard(p)));
+      document.getElementById('btn-more-keyed').style.display = keyedLimit >= keyed.length ? 'none' : 'block';
+    }
+
+    function createProviderCard(provider) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'provider-card-wrapper';
+      wrapper.id = `wrapper-${provider.id}`;
+
+      const card = document.createElement('div');
+      const isSelected = activeProvider && activeProvider.id === provider.id;
+      card.className = `provider-card ${isSelected ? 'selected' : ''}`;
+      const isLiked = likedProviderIds.has(provider.id);
+
+      card.innerHTML = `
+        <div class="provider-card-header">
+          <strong style="font-size: 1rem;">${provider.name} ${provider.isLive ? '<span class="live-badge">LIVE API</span>' : ''}</strong>
+          <button class="like-toggle ${isLiked ? 'liked' : ''}" onclick="event.stopPropagation(); toggleLike('${provider.id}')">
+            ${isLiked ? '❤️' : '🤍'}
+          </button>
+        </div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px;">${provider.desc}</div>
+        <div style="display:flex; justify-content:space-between; font-size: 0.75rem;">
+          <span style="color: var(--accent);">${provider.categories.length} Primary Categories</span>
+          <span style="color: var(--keyless-text); font-weight:600;">${provider.pdCount || ''}</span>
+        </div>
+      `;
+
+      card.onclick = () => selectProvider(provider);
+      wrapper.appendChild(card);
+
+      if (isSelected) {
+        const drilldown = document.createElement('div');
+        drilldown.className = 'inline-drilldown-panel';
+        drilldown.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <div class="breadcrumbs" id="drilldown-crumbs" style="margin:0;">${activeBreadcrumbTrail.join(' &gt; ')}</div>
+            ${provider.siteUrl ? `<a href="${provider.siteUrl}" target="_blank" class="btn-action btn-visit" style="padding:4px 10px; font-size:0.75rem;">🌐 Search on Official Site</a>` : ''}
+          </div>
+          <div class="tier-label">Primary Categories (5 at a time)</div>
+          <div class="category-chip-group" id="drilldown-primary-categories"></div>
+          <button class="btn-more" id="btn-more-categories" style="display:none;" onclick="loadMoreCategories()">+ More Categories</button>
+          <div id="cascade-container"></div>
+          <div id="gallery-container" style="display:none; margin-top:15px;">
+            <div class="tier-label" id="gallery-tier-label">Available Assets (10 at a time):</div>
+            <div class="icon-gallery-grid" id="drilldown-icons"></div>
+            <button class="btn-more" id="btn-more-icons" style="display:none;" onclick="loadNextTenIcons()">+ Load Next 10 Images</button>
+          </div>
+        `;
+        wrapper.appendChild(drilldown);
+      }
+
+      return wrapper;
+    }
+
+    window.loadMoreKeyless = function() {
+      keylessLimit += 5;
+      renderCatalog();
+    };
+    window.loadMoreKeyed = function() {
+      keyedLimit += 5;
+      renderCatalog();
+    };
+
+    function renderDirectoryChunk() {
+      const tbody = document.getElementById('directory-table-body');
+      const slice = FULL_DIRECTORY.slice(directoryOffset, directoryOffset + DIRECTORY_PAGE_SIZE);
+
+      slice.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.className = 'directory-row';
+        tr.innerHTML = `
+          <td><strong>${item.name}</strong></td>
+          <td><span class="badge ${item.type === 'Keyless' ? 'badge-keyless' : 'badge-keyed'}">${item.type}</span></td>
+          <td style="color:var(--text-muted);">${item.domain}</td>
+          <td>
+            <a href="${item.siteUrl}" target="_blank" onclick="event.stopPropagation();" style="color:var(--accent); text-decoration:none; font-weight:600; display:inline-flex; align-items:center; gap:4px;">
+              <span>Visit Portal</span> &nearr;
+            </a>
+          </td>
+        `;
+        tr.onclick = () => {
+          let found = INTERACTIVE_PROVIDERS.find(p => p.id === item.id);
+          if (!found) {
+            found = {
+              id: item.id,
+              name: item.name,
+              type: item.type === 'Keyless' ? 'keyless' : 'keyed',
+              desc: item.domain,
+              pdCount: 'Full Public Access',
+              siteUrl: item.siteUrl,
+              usage: `Public Portal: ${item.siteUrl}`,
+              sampleImages: [{ title: `${item.name} Archival Asset`, url: `https://picsum.photos/seed/${item.id}/400/300` }],
+              categories: [{ name: 'Collection Archives', subs: [{ name: 'General Gallery', icons: Array.from({ length: 10 }, (_, i) => ({ title: `${item.name} Piece #${i+1}`, url: `https://picsum.photos/seed/${item.id}_${i}/200/200` })) }] }]
+            };
+            INTERACTIVE_PROVIDERS.push(found);
+          }
+          switchTab('interactive');
+          selectProvider(found);
+        };
+        tbody.appendChild(tr);
+      });
+
+      directoryOffset += slice.length;
+      document.getElementById('directory-counter').textContent = `Showing ${directoryOffset} of ${FULL_DIRECTORY.length}`;
+      document.getElementById('btn-more-directory').style.display = directoryOffset >= FULL_DIRECTORY.length ? 'none' : 'block';
+    }
+
+    window.loadMoreDirectory = function() {
+      renderDirectoryChunk();
+    };
+
+    function selectProvider(provider) {
+      activeProvider = provider;
+      activeBreadcrumbTrail = [provider.name];
+      primaryCategoryOffset = 0;
+
+      renderCatalog();
+      renderLikedSidebar();
+
+      renderPrimaryCategoryChunk();
+
+      const samples = provider.sampleImages || [];
+      if (samples.length > 0) {
+        inspectAsset(samples[0], provider);
+      }
+
+      const activeNode = document.getElementById(`wrapper-${provider.id}`);
+      if (activeNode) {
+        activeNode.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+
+    function renderPrimaryCategoryChunk() {
+      const container = document.getElementById('drilldown-primary-categories');
+      const moreBtn = document.getElementById('btn-more-categories');
+      if (!container || !activeProvider) return;
+
+      const allCats = activeProvider.categories;
+      const slice = allCats.slice(primaryCategoryOffset, primaryCategoryOffset + CHUNK_SIZE);
+
+      slice.forEach(cat => {
+        const chip = document.createElement('div');
+        chip.className = 'category-chip';
+        chip.textContent = cat.name;
+        chip.onclick = () => {
+          Array.from(container.children).forEach(c => c.classList.remove('active'));
+          chip.classList.add('active');
+
+          const cascade = document.getElementById('cascade-container');
+          const gallery = document.getElementById('gallery-container');
+          if (cascade) cascade.innerHTML = '';
+          if (gallery) gallery.style.display = 'none';
+
+          activeBreadcrumbTrail = [activeProvider.name, cat.name];
+          updateBreadcrumbs();
+          handleCategoryBranch(cat, 1);
+        };
+        container.appendChild(chip);
+      });
+
+      primaryCategoryOffset += slice.length;
+      if (moreBtn) {
+        moreBtn.style.display = primaryCategoryOffset < allCats.length ? 'block' : 'none';
+      }
+    }
+
+    window.loadMoreCategories = function() {
+      renderPrimaryCategoryChunk();
+    };
+
+    function handleCategoryBranch(node, depth) {
+      const cascadeContainer = document.getElementById('cascade-container');
+      const galleryContainer = document.getElementById('gallery-container');
+      const drilldownIcons = document.getElementById('drilldown-icons');
+      if (!cascadeContainer) return;
+
+      const existingTiers = document.querySelectorAll(`.tier-level-${depth}`);
+      existingTiers.forEach(t => t.remove());
+
+      if (node.subs && node.subs.length > 0) {
+        if (galleryContainer) galleryContainer.style.display = 'none';
+
+        const tierWrap = document.createElement('div');
+        tierWrap.className = `cascade-tier tier-level-${depth}`;
+        tierWrap.innerHTML = `<div class="tier-label">Sub-Categories (Tier ${depth}):</div>`;
+
+        const group = document.createElement('div');
+        group.className = 'category-chip-group';
+
+        node.subs.forEach(sub => {
+          const chip = document.createElement('div');
+          chip.className = 'category-chip';
+          chip.textContent = sub.name;
+          chip.onclick = () => {
+            Array.from(group.children).forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+
+            activeBreadcrumbTrail = activeBreadcrumbTrail.slice(0, depth + 1);
+            activeBreadcrumbTrail[depth + 1] = sub.name;
+            updateBreadcrumbs();
+
+            handleCategoryBranch(sub, depth + 1);
+          };
+          group.appendChild(chip);
+        });
+
+        tierWrap.appendChild(group);
+        cascadeContainer.appendChild(tierWrap);
+      } else if (node.isLiveQuery) {
+        activeLiveQuery = node.isLiveQuery;
+        livePage = 1;
+        if (drilldownIcons) drilldownIcons.innerHTML = '';
+        if (galleryContainer) galleryContainer.style.display = 'block';
+        fetchLiveArticChunk();
+      } else if (node.icons && node.icons.length > 0) {
+        activeLiveQuery = null;
+        activeIconPool = node.icons;
+        iconOffset = 0;
+        if (drilldownIcons) drilldownIcons.innerHTML = '';
+        if (galleryContainer) galleryContainer.style.display = 'block';
+        loadNextTenIcons();
+      } else {
+        if (galleryContainer) galleryContainer.style.display = 'none';
+      }
+    }
+
+    window.loadNextTenIcons = function() {
+      if (activeLiveQuery) {
+        fetchLiveArticChunk();
+        return;
+      }
+
+      const galleryTierLabel = document.getElementById('gallery-tier-label');
+      const btnMoreIcons = document.getElementById('btn-more-icons');
+      if (galleryTierLabel) {
+        galleryTierLabel.textContent = `Available Assets (${Math.min(iconOffset + ICONS_PER_PAGE, activeIconPool.length)} of ${activeIconPool.length}):`;
+      }
+      const nextTen = activeIconPool.slice(iconOffset, iconOffset + ICONS_PER_PAGE);
+
+      nextTen.forEach(asset => appendThumbnail(asset));
+
+      iconOffset += nextTen.length;
+      if (btnMoreIcons) {
+        btnMoreIcons.style.display = iconOffset < activeIconPool.length ? 'block' : 'none';
+      }
+    };
+
+    async function fetchLiveArticChunk() {
+      const btnMoreIcons = document.getElementById('btn-more-icons');
+      const galleryTierLabel = document.getElementById('gallery-tier-label');
+      if (btnMoreIcons) btnMoreIcons.style.display = 'none';
+      if (galleryTierLabel) galleryTierLabel.textContent = `Querying live Art Institute catalog (Page ${livePage})...`;
+
+      try {
+        const url = `https://api.artic.edu/api/v1/artworks/search?q=${encodeURIComponent(activeLiveQuery)}&query[term][is_public_domain]=true&limit=${ICONS_PER_PAGE}&page=${livePage}&fields=id,title,image_id`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (data.data && data.data.length > 0) {
+          data.data.forEach(item => {
+            if (item.image_id) {
+              appendThumbnail({
+                title: item.title,
+                url: `https://www.artic.edu/iiif/2/${item.image_id}/full/400,/0/default.jpg`
+              });
+            }
+          });
+
+          livePage++;
+          if (galleryTierLabel) galleryTierLabel.textContent = `Streaming Live Masterworks (${livePage * ICONS_PER_PAGE} retrieved):`;
+          if (btnMoreIcons) btnMoreIcons.style.display = 'block';
+        } else {
+          if (galleryTierLabel) galleryTierLabel.textContent = `End of live catalog records reached.`;
+        }
+      } catch (err) {
+        console.error('Error contacting live API:', err);
+        if (galleryTierLabel) galleryTierLabel.textContent = `Failed to stream live records.`;
+      }
+    }
+
+    function appendThumbnail(asset) {
+      const drilldownIcons = document.getElementById('drilldown-icons');
+      if (!drilldownIcons) return;
+
+      const img = document.createElement('img');
+      img.className = 'gallery-icon-thumb';
+      img.src = asset.url;
+      img.alt = asset.title;
+      img.title = asset.title;
+      img.loading = 'lazy';
+      img.onclick = () => {
+        document.querySelectorAll('.gallery-icon-thumb').forEach(el => el.classList.remove('selected'));
+        img.classList.add('selected');
+        inspectAsset(asset, activeProvider);
+      };
+      drilldownIcons.appendChild(img);
+    }
+
+    // 5. STAGE METADATA, DYNAMIC HEADER, EXTERNAL VISIT LINK, MODAL TRIGGER
+    async function inspectAsset(asset, provider) {
+      activeSelectedAsset = asset;
+      const isAssetLiked = likedAssetUrls.has(asset.url);
+
+      if (stageMainTitle) {
+        stageMainTitle.innerHTML = `&lt;selected picture from&gt; <span style="color:var(--accent);">${provider.name}</span>`;
+      }
+
+      previewBody.className = '';
+      previewBody.innerHTML = `
+        <div class="preview-image-container">
+          <img class="preview-image" id="stage-img" src="${asset.url}" crossOrigin="anonymous" alt="${asset.title}" />
+        </div>
+
+        <button class="btn-action" style="width:100%; margin-bottom:8px; background:#0284c7;" onclick="openFullImageModal('${encodeURIComponent(asset.url)}', '${encodeURIComponent(asset.title)}')">
+          🔍 View Full Image
+        </button>
+
+        ${provider.siteUrl ? `
+          <a href="${provider.siteUrl}" target="_blank" class="btn-action btn-visit" style="width:100%; margin-bottom:12px;">
+            🌐 Visit Official Search Website &rarr;
+          </a>
+        ` : ''}
+
+        <div class="asset-stage-title-row">
+          <strong style="font-size:1.05rem; display:block;">${asset.title}</strong>
+          <button class="like-toggle ${isAssetLiked ? 'liked' : ''}" onclick="toggleLikeAsset('${encodeURIComponent(asset.url)}')" title="Like this picture">
+            ${isAssetLiked ? '❤️' : '🤍'}
+          </button>
+        </div>
+        
+        <div class="meta-tag-row">
+          <div class="meta-tag" id="meta-resolution">Scanning res...</div>
+          <div class="meta-tag" id="meta-filesize">Measuring bytes...</div>
+        </div>
+
+        <div class="action-panel">
+          <div class="tier-label" style="margin-bottom:6px;">Canvas Transforms & Production:</div>
+          <div class="btn-action-group">
+            <button class="btn-action" onclick="produceIconSize()">App Icon (64x64)</button>
+            <button class="btn-action" onclick="produceReducedSize()">Reduce Size (50%)</button>
+            <button class="btn-action btn-action-full" onclick="saveActiveImage()">Save / Download Image</button>
+          </div>
+        </div>
+
+        <button class="btn-action" style="width:100%; margin-bottom: 12px;" onclick="randomizeProviderSample('${provider.id}')">
+          🎲 Randomize Sample Image
+        </button>
+
+        <div class="tier-label">Asset CDN Reference:</div>
+        <div class="usage-instruction-box" id="active-cdn-ref">${asset.url}</div>
+      `;
+
+      const stageImg = document.getElementById('stage-img');
+      stageImg.onload = () => {
+        const resBadge = document.getElementById('meta-resolution');
+        if (resBadge) resBadge.textContent = `${stageImg.naturalWidth} x ${stageImg.naturalHeight} px`;
+      };
+
+      measureFileSize(asset.url);
+    }
+
+    window.openFullImageModal = function(encodedUrl, encodedTitle) {
+      const url = decodeURIComponent(encodedUrl);
+      const title = decodeURIComponent(encodedTitle);
+      modalImgNode.src = url;
+      modalCaptionNode.textContent = title;
+      fullImageModal.classList.add('active');
+    };
+
+    window.closeFullImageModal = function() {
+      fullImageModal.classList.remove('active');
+      modalImgNode.src = '';
+    };
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && fullImageModal.classList.contains('active')) {
+        closeFullImageModal();
+      }
+    });
+
+    window.toggleLikeAsset = function(encodedUrl) {
+      const url = decodeURIComponent(encodedUrl);
+      if (likedAssetUrls.has(url)) {
+        likedAssetUrls.delete(url);
+      } else {
+        likedAssetUrls.add(url);
+      }
+      if (activeSelectedAsset && activeSelectedAsset.url === url) {
+        inspectAsset(activeSelectedAsset, activeProvider);
+      }
+      renderLikedSidebar();
+    };
+
+    window.randomizeProviderSample = function(providerId) {
+      const provider = INTERACTIVE_PROVIDERS.find(p => p.id === providerId);
+      if (!provider || !provider.sampleImages || provider.sampleImages.length === 0) return;
+
+      let nextIdx = Math.floor(Math.random() * provider.sampleImages.length);
+      if (provider.sampleImages.length > 1 && provider.sampleImages[nextIdx].url === activeSelectedAsset?.url) {
+        nextIdx = (nextIdx + 1) % provider.sampleImages.length;
+      }
+      const randomAsset = provider.sampleImages[nextIdx];
+      inspectAsset(randomAsset, provider);
+    };
+
+    async function measureFileSize(url) {
+      const sizeBadge = document.getElementById('meta-filesize');
+      if (!sizeBadge) return;
+
+      try {
+        let res = await fetch(url, { method: 'HEAD' });
+        let bytes = res.headers.get('content-length');
+
+        if (!bytes) {
+          res = await fetch(url);
+          const blob = await res.blob();
+          bytes = blob.size;
+        }
+
+        if (bytes) {
+          const kb = (bytes / 1024).toFixed(1);
+          const mb = (bytes / (1024 * 1024)).toFixed(2);
+          sizeBadge.textContent = bytes > 1048576 ? `${mb} MB` : `${kb} KB`;
+        } else {
+          sizeBadge.textContent = 'Size unavailable';
+        }
+      } catch (e) {
+        sizeBadge.textContent = 'Approx. 45-80 KB';
+      }
+    }
+
+    window.produceIconSize = function() {
+      if (!activeSelectedAsset) return;
+      transformAndDownload(64, 64, true, 'tao-icon-64x64.png', 'image/png');
+    };
+
+    window.produceReducedSize = function() {
+      const img = document.getElementById('stage-img');
+      if (!img || !activeSelectedAsset) return;
+      const targetW = Math.round((img.naturalWidth || 400) * 0.5);
+      const targetH = Math.round((img.naturalHeight || 300) * 0.5);
+      transformAndDownload(targetW, targetH, false, 'tao-reduced.jpg', 'image/jpeg', 0.7);
+    };
+
+    window.saveActiveImage = function() {
+      if (!activeSelectedAsset) return;
+      const link = document.createElement('a');
+      link.href = activeSelectedAsset.url;
+      link.download = `${activeSelectedAsset.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.jpg`;
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
+
+    function transformAndDownload(width, height, rounded, filename, mimeType, quality = 0.9) {
+      const img = document.getElementById('stage-img');
+      if (!img) return;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+
+      if (rounded) {
+        const radius = 14;
+        ctx.beginPath();
+        ctx.moveTo(radius, 0);
+        ctx.lineTo(width - radius, 0);
+        ctx.quadraticCurveTo(width, 0, width, radius);
+        ctx.lineTo(width, height - radius);
+        ctx.quadraticCurveTo(width, height, width - radius, height);
+        ctx.lineTo(radius, height);
+        ctx.quadraticCurveTo(0, height, 0, height - radius);
+        ctx.lineTo(0, radius);
+        ctx.quadraticCurveTo(0, 0, radius, 0);
+        ctx.closePath();
+        ctx.clip();
+      }
+
+      ctx.drawImage(img, 0, 0, width, height);
+
+      try {
+        canvas.toBlob(blob => {
+          if (!blob) {
+            window.open(activeSelectedAsset.url, '_blank');
+            return;
+          }
+          const blobUrl = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = blobUrl;
+          link.download = filename;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(blobUrl);
+        }, mimeType, quality);
+      } catch (e) {
+        window.open(activeSelectedAsset.url, '_blank');
+      }
+    }
+
+    function updateBreadcrumbs() {
+      const crumbs = document.getElementById('drilldown-crumbs');
+      if (crumbs) crumbs.innerHTML = activeBreadcrumbTrail.join(' &gt; ');
+    }
+
+    window.toggleLike = function(id) {
+      if (likedProviderIds.has(id)) {
+        likedProviderIds.delete(id);
+      } else {
+        likedProviderIds.add(id);
+      }
+      renderCatalog();
+      renderLikedSidebar();
+    };
+
+    function renderLikedSidebar() {
+      if (likedProviderIds.size === 0 && likedAssetUrls.size === 0) {
+        likedPane.innerHTML = `<div style="color: var(--text-muted); font-size: 0.85rem; padding: 10px;">Click ❤️ on providers or pictures to save them here.</div>`;
+        return;
+      }
+      likedPane.innerHTML = '';
+
+      if (likedProviderIds.size > 0) {
+        const provHeader = document.createElement('div');
+        provHeader.className = 'tier-label';
+        provHeader.textContent = 'Providers:';
+        likedPane.appendChild(provHeader);
+
+        likedProviderIds.forEach(id => {
+          const p = INTERACTIVE_PROVIDERS.find(item => item.id === id);
+          if (!p) return;
+          const btn = document.createElement('button');
+          btn.className = `liked-item-btn ${activeProvider && activeProvider.id === id ? 'active' : ''}`;
+          btn.innerHTML = `<span>${p.name}</span><span style="opacity:0.6;">&rarr;</span>`;
+          btn.onclick = () => {
+            switchTab('interactive');
+            selectProvider(p);
+          };
+          likedPane.appendChild(btn);
+        });
+      }
+
+      if (likedAssetUrls.size > 0) {
+        const picHeader = document.createElement('div');
+        picHeader.className = 'tier-label';
+        picHeader.style.marginTop = '15px';
+        picHeader.textContent = `Liked Pictures (${likedAssetUrls.size}):`;
+        likedPane.appendChild(picHeader);
+
+        likedAssetUrls.forEach(url => {
+          const btn = document.createElement('button');
+          btn.className = 'liked-item-btn';
+          btn.innerHTML = `<span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:200px;">${url.split('/').pop() || 'Artwork'}</span><span>❤️</span>`;
+          btn.onclick = () => {
+            inspectAsset({ title: 'Favorited Picture', url: url }, activeProvider || INTERACTIVE_PROVIDERS[0]);
+          };
+          likedPane.appendChild(btn);
+        });
+      }
+    }
+
+    renderCatalog();
+  </script>
+</body>
+</html>

@@ -1,0 +1,141 @@
+<!-- File: /Users/fredliu/extraordinaryme/frontend/getplatformsystemvalues.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TAO Engine :: System Diagnostics</title>
+    <style>
+        body {
+            margin: 0;
+            height: 100vh;
+            background-color: #1e293b; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: monospace;
+            color: #94a3b8;
+        }
+        
+        .diagnostic-panel {
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 40px;
+            width: 80vw;
+            max-width: 800px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        h2 {
+            color: #ffd700;
+            margin-top: 0;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 15px;
+        }
+
+        .data-row {
+            display: flex;
+            padding: 12px 0;
+            border-bottom: 1px dashed #1e293b;
+        }
+
+        .data-label {
+            width: 30%;
+            color: #38bdf8;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 14px;
+        }
+
+        .data-value {
+            width: 70%;
+            color: #f8fafc;
+            font-size: 14px;
+            word-break: break-all;
+        }
+
+        .sandbox-warning {
+            margin-top: 30px;
+            padding: 15px;
+            background-color: rgba(255, 51, 51, 0.1);
+            border-left: 4px solid #ff3333;
+            color: #ffcccc;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="diagnostic-panel">
+        <h2>TAO Engine / Pre-Flight Diagnostics</h2>
+        <div id="diagnostics-content">
+            <span style="color: #38bdf8;">Interrogating host environment...</span>
+        </div>
+    </div>
+
+    <script>
+        function runDiagnostics() {
+            try {
+                // 1. Viewport & Screen Geometry
+                const screenW = window.screen.width;
+                const screenH = window.screen.height;
+                const pixelRatio = window.devicePixelRatio || 1;
+                
+                // 2. Hardware Estimates (Safari aggressively blocks these)
+                const cores = navigator.hardwareConcurrency || 'Unknown (Blocked by Safari Privacy)';
+                const ram = navigator.deviceMemory ? navigator.deviceMemory + '+ GB' : 'Unknown (Blocked by Safari Privacy)'; 
+                
+                // 3. Platform & Browser Identity
+                const platform = navigator.platform || 'Unknown';
+                const userAgent = navigator.userAgent;
+                const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+                // Render to DOM
+                const outputHTML = `
+                    <div class="data-row">
+                        <div class="data-label">Platform Engine</div>
+                        <div class="data-value">${platform}</div>
+                    </div>
+                    <div class="data-row">
+                        <div class="data-label">Logical CPU Cores</div>
+                        <div class="data-value">${cores}</div>
+                    </div>
+                    <div class="data-row">
+                        <div class="data-label">Estimated Memory</div>
+                        <div class="data-value">${ram}</div>
+                    </div>
+                    <div class="data-row">
+                        <div class="data-label">Screen Geometry</div>
+                        <div class="data-value">${screenW} x ${screenH} (Pixel Ratio: ${pixelRatio})</div>
+                    </div>
+                    <div class="data-row">
+                        <div class="data-label">Touch Interface</div>
+                        <div class="data-value">${isTouch ? 'TRUE (Palmtop Paradigm Valid)' : 'FALSE (Desktop Paradigm Valid)'}</div>
+                    </div>
+                    <div class="data-row">
+                        <div class="data-label">User Agent String</div>
+                        <div class="data-value" style="font-size: 11px;">${userAgent}</div>
+                    </div>
+
+                    <div class="sandbox-warning">
+                        <strong>SECURITY SANDBOX LIMITATION:</strong> Safari actively blocks deep hardware APIs (Storage capacity, exact RAM) on local connections to prevent fingerprinting. To bypass this and execute a true Pre-Flight check, the engine must be packaged as a native desktop application (Tauri/Electron).
+                    </div>
+                `;
+
+                setTimeout(() => {
+                    document.getElementById('diagnostics-content').innerHTML = outputHTML;
+                }, 400);
+
+            } catch (error) {
+                document.getElementById('diagnostics-content').innerHTML = `<span style="color: #ff3333;">Diagnostic failure: ${error.message}</span>`;
+            }
+        }
+
+        runDiagnostics();
+    </script>
+</body>
+</html>

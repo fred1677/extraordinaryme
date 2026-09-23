@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TAO Sphere :: High-Res Asset Forge</title>
+    <style>
+        body {
+            margin: 0;
+            height: 100vh;
+            background-color: #0f172a; 
+            display: flex;
+            flex-direction: column;
+            align-items: center; 
+            justify-content: center; 
+            font-family: monospace;
+            overflow: hidden;
+            color: #e2e8f0;
+        }
+
+        /* Displays it cleanly on screen, but the actual export is 1800x1800 */
+        .preview-container {
+            width: 300px;
+            height: 300px;
+            margin-bottom: 40px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+            border-radius: 50%;
+        }
+
+        .controls {
+            display: flex;
+            gap: 16px;
+        }
+
+        button {
+            background-color: #38bdf8;
+            color: #0f172a;
+            border: none;
+            padding: 12px 24px;
+            font-size: 1rem;
+            font-weight: bold;
+            font-family: monospace;
+            border-radius: 6px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background-color: #10b981;
+            transform: translateY(-2px);
+        }
+
+        .btn-svg {
+            background-color: #f59e0b;
+        }
+    </style>
+</head>
+<body>
+
+    <h2 style="color: #38bdf8; margin-bottom: 30px; font-weight: 300; letter-spacing: 2px;">ASSET FORGE: TAO SPHERE</h2>
+
+    <div class="preview-container">
+        <!-- 
+          The Master SVG. Width and height are hardcoded to 1800 (6" x 6" @ 300DPI) for the download, 
+          but the CSS 'width: 100%' keeps it fitting in the 300px preview box above. 
+        -->
+        <svg id="tao-master" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="1800" height="1800" style="width: 100%; height: 100%; display: block; border-radius: 50%;">
+            <defs>
+                <radialGradient id="sphereOverlay" cx="30%" cy="30%" r="70%">
+                    <stop offset="0%" stop-color="#ffffff" stop-opacity="0.8"/>   
+                    <stop offset="35%" stop-color="#ffffff" stop-opacity="0.0"/>  
+                    <stop offset="85%" stop-color="#000000" stop-opacity="0.5"/>  
+                    <stop offset="100%" stop-color="#000000" stop-opacity="0.9"/> 
+                </radialGradient>
+                
+                <filter id="textDropShadow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#000000" flood-opacity="0.8"/>
+                </filter>
+            </defs>
+            
+            <path d="M50,0 A50,50 0 0,0 50,100 Z" fill="#ffffff" />
+            <path d="M50,0 A50,50 0 0,1 50,100 Z" fill="#000000" />
+            
+            <circle cx="50" cy="25" r="25" fill="#ffffff" />
+            <circle cx="50" cy="75" r="25" fill="#000000" />
+            
+            <circle cx="50" cy="50" r="50" fill="url(#sphereOverlay)" />
+            <text x="50" y="50" dy="0.32em" font-family="monospace" font-size="48" font-weight="900" fill="#ffd700" text-anchor="middle" letter-spacing="-1" filter="url(#textDropShadow)">TAO</text>
+        </svg>
+    </div>
+
+    <div class="controls">
+        <button onclick="downloadPNG()">Download 6"x6" PNG</button>
+        <button class="btn-svg" onclick="downloadSVG()">Download Vector SVG</button>
+    </div>
+
+    <script>
+        // Extracts the SVG and forces a download as a native .svg file (Best for Fabric.js)
+        function downloadSVG() {
+            const svg = document.getElementById('tao-master');
+            const serializer = new XMLSerializer();
+            let source = serializer.serializeToString(svg);
+            
+            source = '<?xml version="1.0" standalone="no"?>\r\n' + source;
+            const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(source);
+            
+            triggerDownload(url, 'tao-sphere.svg');
+        }
+
+        // Paints the SVG onto a hidden 1800x1800 canvas, then exports as a raster .png picture
+        function downloadPNG() {
+            const svg = document.getElementById('tao-master');
+            const canvas = document.createElement('canvas');
+            
+            // Set canvas physical dimensions to 6x6 inches at 300 DPI
+            canvas.width = 1800;
+            canvas.height = 1800;
+            const ctx = canvas.getContext('2d');
+            
+            const data = (new XMLSerializer()).serializeToString(svg);
+            const DOMURL = window.URL || window.webkitURL || window;
+            
+            const img = new Image();
+            const svgBlob = new Blob([data], {type: 'image/svg+xml;charset=utf-8'});
+            const url = DOMURL.createObjectURL(svgBlob);
+            
+            img.onload = function () {
+                ctx.drawImage(img, 0, 0, 1800, 1800);
+                DOMURL.revokeObjectURL(url);
+                const imgURI = canvas.toDataURL('image/png').replace('image/png', 'image/octet-stream');
+                triggerDownload(imgURI, 'tao-sphere-6x6.png');
+            };
+            img.src = url;
+        }
+
+        // Helper function to simulate a user click for downloading
+        function triggerDownload(url, filename) {
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>
