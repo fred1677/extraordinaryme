@@ -14,9 +14,8 @@
  * SECTION 4: THE FORGE (Where desktop icons and apps are saved and loaded)
  * SECTION 5: AI ENGINES (The Local AI brain and the Cloud AI fallback)
  * SECTION 6: ADVERTISING (The billboard system for free-tier users)
- * SECTION 7: UNIVERSAL APP STATE MANAGER (Dynamic JSONB Database for ANY OS App)
- * SECTION 8: FALLBACK ROUTING (Keeping users inside the OS interface)
- * SECTION 9: SERVER IGNITION (Starting the engine)
+ * SECTION 7: FALLBACK ROUTING (Keeping users inside the OS interface)
+ * SECTION 8: SERVER IGNITION (Starting the engine)
  * ============================================================================
  */
 
@@ -431,80 +430,7 @@ app.use('/api/ads', adsRouter);
 
 
 // ============================================================================
-// SECTION 7: UNIVERSAL APP STATE MANAGER (Dynamic JSONB Database for ANY OS App)
-// ============================================================================
-
-// 1. Ensure the universal table exists when the server boots
-db.pool.query(`
-    CREATE TABLE IF NOT EXISTS user_app_states (
-        user_id VARCHAR(255),
-        app_name VARCHAR(50),
-        state_data JSONB,
-        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (user_id, app_name)
-    );
-`).catch(err => console.error("[System] Failed to verify universal state table:", err));
-
-/**
- * Endpoint: POST /api/state/sync
- * Purpose: Catches the JSON payload from Health.js, Productivity.js, Calendar.js, etc.
- * and instantly saves it into the universal AWS JSONB store.
- */
-app.post('/api/state/sync', async (req, res) => {
-    const { userId, appName, stateData } = req.body;
-    
-    if (!userId || !appName) {
-        return res.status(400).json({ error: "Missing userId or appName" });
-    }
-
-    try {
-        // "UPSERT" logic: If the record doesn't exist, INSERT it. If it does, UPDATE it.
-        const query = `
-            INSERT INTO user_app_states (user_id, app_name, state_data, last_updated)
-            VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
-            ON CONFLICT (user_id, app_name) 
-            DO UPDATE SET state_data = $3, last_updated = CURRENT_TIMESTAMP;
-        `;
-        
-        await db.pool.query(query, [userId, appName, JSON.stringify(stateData)]);
-        res.status(200).json({ success: true, message: `${appName} state synced to Universal Store.` });
-        
-    } catch (err) {
-        console.error(`[State Sync Error - ${appName}]:`, err.message);
-        res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-/**
- * Endpoint: GET /api/state/load
- * Purpose: Retrieves the saved JSON payload for any requested app and sends it to the frontend.
- */
-app.get('/api/state/load', async (req, res) => {
-    const { userId, appName } = req.query;
-
-    if (!userId || !appName) {
-        return res.status(400).json({ error: "Missing userId or appName" });
-    }
-
-    try {
-        const query = `SELECT state_data FROM user_app_states WHERE user_id = $1 AND app_name = $2`;
-        const result = await db.pool.query(query, [userId, appName]);
-
-        if (result.rows.length > 0) {
-            res.status(200).json({ success: true, state: result.rows[0].state_data });
-        } else {
-            // Return empty state if the user hasn't opened this app before
-            res.status(200).json({ success: true, state: null }); 
-        }
-    } catch (err) {
-        console.error(`[State Load Error - ${appName}]:`, err.message);
-        res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-
-// ============================================================================
-// SECTION 8: FALLBACK ROUTING (Keeping Users in the Matrix)
+// SECTION 7: FALLBACK ROUTING (Keeping Users in the Matrix)
 // ============================================================================
 
 /**
@@ -519,7 +445,7 @@ app.get('*', (req, res) => {
 
 
 // ============================================================================
-// SECTION 9: SERVER IGNITION (Starting the Engine)
+// SECTION 8: SERVER IGNITION (Starting the Engine)
 // ============================================================================
 
 /**

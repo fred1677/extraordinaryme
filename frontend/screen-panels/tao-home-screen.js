@@ -4,11 +4,6 @@
  * 
  * THE SECURE ROOM (Backend Mode Switch)
  * ============================================================================
- * LAYPERSON EXPLANATION:
- * This script is the "Light Switch" for the Admin Room. It turns off the 
- * User Room lights, turns on the Backend Room, asks the OS to lower the 
- * ceiling, and injects the secure Top Bar. It builds the secure desktop ONCE.
- * ============================================================================
  */
 
 import { initTopBar } from '../src/functions/t/top-bar.js';
@@ -16,30 +11,23 @@ import { desktopManifest } from './desktop-manifest.js';
 
 export async function initTaoHomeScreen() {
     return new Promise(async (resolve) => {
-        // 1. THE LIGHT SWITCH
         const userWorkspace = document.getElementById('user-workspace');
         const backendWorkspace = document.getElementById('backend-workspace');
         
-        if (userWorkspace) userWorkspace.style.display = 'none';     // Turn off user mode
-        if (backendWorkspace) backendWorkspace.style.display = 'block'; // Turn on backend
+        if (userWorkspace) userWorkspace.style.display = 'none';     
+        if (backendWorkspace) backendWorkspace.style.display = 'block'; 
 
-        // 2. GEOMETRY ENFORCEMENT & TOP BAR
         if (window.TAO_ENGINE && window.TAO_ENGINE.setWorkspaceMode) {
             window.TAO_ENGINE.setWorkspaceMode('backend');
         }
-        await initTopBar(); // Ensure top bar is mounted in the backend room
+        await initTopBar(); 
 
-        // 3. PREVENT DUPLICATE MOUNTS
-        // If the secure desktop already exists, we are done. (The switch is complete).
         if (document.getElementById('tao-backend-canvas')) {
             console.log('[System Router] Switched to Secure Backend Mode.');
             resolve();
             return;
         }
 
-        // ====================================================================
-        // 4. DESKTOP CONSTRUCTION (Runs only once during the first entry)
-        // ====================================================================
         const bounds = window.TAO_ENGINE.getWorkspaceBounds();
 
         const desktop = document.createElement('div');
@@ -47,7 +35,7 @@ export async function initTaoHomeScreen() {
         Object.assign(desktop.style, {
             position: 'absolute', top: `${bounds.top}px`, left: '0', width: '100vw', 
             height: `calc(100vh - ${bounds.top + bounds.bottom}px)`,
-            backgroundColor: '#0f172a', // Dark theme for backend
+            backgroundColor: '#0f172a', 
             display: 'flex', alignContent: 'flex-start', flexWrap: 'wrap',
             padding: '24px 40px', gap: '30px', boxSizing: 'border-box',
             overflowY: 'auto', pointerEvents: 'auto', zIndex: '20000' 
@@ -60,26 +48,32 @@ export async function initTaoHomeScreen() {
         const createAppIcon = (appName, iconSvg, onClickAction) => {
             const appContainer = document.createElement('div');
             appContainer.dataset.appName = appName; 
+            
+            // Touch target strictly locked to Apple's 44px minimum
             Object.assign(appContainer.style, {
                 display: 'flex', flexDirection: 'column', alignItems: 'center',
-                width: '80px', cursor: 'pointer', transition: 'transform 0.2s ease'
+                width: '44px', minHeight: '44px', cursor: 'pointer', transition: 'transform 0.2s ease'
             });
 
             const iconBox = document.createElement('div');
+            // Visible glass container scaled down to 32px
             Object.assign(iconBox.style, {
-                width: '60px', height: '60px', backgroundColor: 'rgba(255, 255, 255, 0.1)', 
-                borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.2)',
+                width: '32px', height: '32px', backgroundColor: 'rgba(255, 255, 255, 0.1)', 
+                borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.2)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 4px 10px rgba(0,0,0,0.5)', marginBottom: '8px',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.5)', marginBottom: '6px',
                 backdropFilter: 'blur(5px)'
             });
-            iconBox.innerHTML = iconSvg;
+            // SVG graphic inside scaled down proportionally
+            iconBox.innerHTML = `<div style="display: flex; align-items: center; justify-content: center; transform: scale(0.70); transform-origin: center;">${iconSvg}</div>`;
 
             const appLabel = document.createElement('div');
+            // Labels configured to prevent wrapping inside the tight 44px bounds
             Object.assign(appLabel.style, {
-                color: '#f8fafc', // Lighter text to contrast the dark background
-                fontFamily: 'sans-serif', fontSize: '12px',
-                textAlign: 'center', textShadow: '0 2px 4px rgba(0,0,0,0.8)'
+                color: '#f8fafc', 
+                fontFamily: 'sans-serif', fontSize: '11px',
+                textAlign: 'center', textShadow: '0 2px 4px rgba(0,0,0,0.8)',
+                whiteSpace: 'nowrap', overflow: 'visible'
             });
             appLabel.innerText = appName;
 
@@ -120,8 +114,6 @@ export async function initTaoHomeScreen() {
                         Object.assign(contentArea.style, { flex: '1', overflow: 'hidden', position: 'relative' });
                         appWindow.appendChild(contentArea);
 
-                        // The Smart Router in windowmanager.js will catch this and put it in the right room
-
                         if (window.TAO_ENGINE && window.TAO_ENGINE.decorateAppWindow) {
                             window.TAO_ENGINE.decorateAppWindow(appWindow, app.appName);
                         }
@@ -136,11 +128,10 @@ export async function initTaoHomeScreen() {
             desktop.appendChild(injectedApp);
         });
 
-        // Attach the secure canvas specifically to the Backend Room
         if (backendWorkspace) {
             backendWorkspace.appendChild(desktop);
         } else {
-            document.body.appendChild(desktop); // Fallback
+            document.body.appendChild(desktop); 
         }
         
         console.log('[System Chrome] Backend Canvas rendered with desktop icons.');

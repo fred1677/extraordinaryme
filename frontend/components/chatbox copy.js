@@ -12,7 +12,7 @@
  * 5. UNIVERSAL PROMPT API (Dynamically accepts text, buttons, and awaits input).
  * 
  * ============================================================================
- * CHATBOX API v1.1: SYNTAX & USAGE
+ * CHATBOX API v1.0: SYNTAX & USAGE
  * ============================================================================
  * The Chatbox acts as a generic UI micro-service. Other modules can invoke it 
  * by dispatching the 'tao-chatbox-prompt' event.
@@ -23,7 +23,6 @@
  *         message: "String. The prompt to display/speak. Supports \n for newlines.",
  *         waitForInput: Boolean. If true, hijacks input until the user responds.
  *         choices: ["Array", "of", "Strings"]. Renders clickable Yes/No buttons. Optional.
- *         expand: Boolean. If true, maximizes the chatbox window for large outputs. Default false.
  *         responseEvent: "String". The custom event name the Chatbox will fire back to you.
  *     }
  * }));
@@ -173,8 +172,8 @@ export function renderChatbox(targetElement, options = {}) {
         window.speechSynthesis.cancel();
     });
 
-    const speakResponse = (text, force = false) => {
-        if (!isVoiceMode && !force) return;
+    const speakResponse = (text) => {
+        if (!isVoiceMode) return;
         
         const cleanText = text.replace(/\[.*?\]/g, '').trim();
         window.speechSynthesis.cancel();
@@ -193,42 +192,13 @@ export function renderChatbox(targetElement, options = {}) {
         window.speechSynthesis.speak(utterance);
     };
 
-    window.addEventListener('tao-voice-speak', (e) => {
-        if (e.detail && e.detail.text) {
-            speakResponse(e.detail.text, true); 
-        }
-    });
-
     // ========================================================================
-    // 🚀 UNIVERSAL PROMPT API (v1.1)
+    // 🚀 UNIVERSAL PROMPT API
     // ========================================================================
     let activePromptEvent = null;
 
     window.addEventListener('tao-chatbox-prompt', (e) => {
-        const { message, waitForInput, choices, responseEvent, expand } = e.detail;
-
-        // 🚀 API EXPANSION: Maximize Mode logic
-        const chatWin = document.getElementById('tao-chatbox-window');
-        if (chatWin) {
-            // Add a smooth transition for resizing
-            chatWin.style.transition = 'width 0.3s ease, height 0.3s ease';
-            
-            if (expand) {
-                // Save original size so we can shrink back safely later
-                if (!chatWin.dataset.origWidth) {
-                    chatWin.dataset.origWidth = chatWin.style.width || '360px';
-                    chatWin.dataset.origHeight = chatWin.style.height || '500px';
-                }
-                chatWin.style.width = '60vw';
-                chatWin.style.height = '80vh';
-            } else {
-                // Shrink back to default if expand is false/missing
-                if (chatWin.dataset.origWidth) {
-                    chatWin.style.width = chatWin.dataset.origWidth;
-                    chatWin.style.height = chatWin.dataset.origHeight;
-                }
-            }
-        }
+        const { message, waitForInput, choices, responseEvent } = e.detail;
 
         if (!isVoiceMode) {
             isVoiceMode = true;
@@ -292,6 +262,9 @@ export function renderChatbox(targetElement, options = {}) {
     const handleSend = async () => {
         let text = inputArea.value.trim();
 
+        // --------------------------------------------------------------------
+        // 1. INTERCEPTOR: Hijack text input if a module is waiting for data
+        // --------------------------------------------------------------------
         if (activePromptEvent) {
             if (!text) text = '0'; 
             
@@ -307,6 +280,9 @@ export function renderChatbox(targetElement, options = {}) {
             return;
         }
 
+        // --------------------------------------------------------------------
+        // 2. NORMAL OPERATION 
+        // --------------------------------------------------------------------
         if (!text) return;
         
         appendMessage('user', text);
@@ -439,15 +415,8 @@ export function renderChatbox(targetElement, options = {}) {
 
     sendBtn.addEventListener('click', handleSend);
 
-    // 🚀 NEW: Dynamic Personalized Greeting
     window.addEventListener('tao-chatbox-opened', () => {
-        if (messageArea.children.length === 0) {
-            // Uses the globally updated name, defaulting to 'Explorer' if empty
-            const username = window.TAO_USER_CONFIG?.username || 'Explorer';
-            const msg = `Hi ${username}, how may I help you?`;
-            appendMessage('tao', msg);
-            speakResponse(msg);
-        }
+        if (messageArea.children.length === 0) appendMessage('tao', "Hi, how may I help you?");
         inputArea.focus(); 
     });
 

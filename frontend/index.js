@@ -27,6 +27,9 @@ async function bootSystem() {
     const preloader = document.getElementById('sandbox-console');
     if (preloader) preloader.remove();
 
+    // Generate a unified cache-buster timestamp for this boot session
+    const bootVersion = Date.now();
+
     // ========================================================================
     // SECTION 1: HARDWARE, ENVIRONMENT & THE "TWO ROOMS"
     // ========================================================================
@@ -92,7 +95,8 @@ async function bootSystem() {
     
     try {
         log("STEP 2", "Routing to Security Gateway (login.js)...");
-        const { initLogin } = await import('./components/login.js');
+        // Apply cache buster to ensure the latest login logic is pulled
+        const { initLogin } = await import(`./components/login.js?v=${bootVersion}`);
         authState = await initLogin();
         
         if (authState.userId) {
@@ -122,17 +126,17 @@ async function bootSystem() {
     };
 
     try {
-        const { igniteEdgeAI } = await import('./libs/ai/ai-hub.js');
+        const { igniteEdgeAI } = await import(`./libs/ai/ai-hub.js?v=${bootVersion}`);
         await igniteEdgeAI();
     } catch (e) {
         log("ERROR", "Failed to wire Edge AI modules.", e.message);
     }
 
     try {
-        const { initWindowManager } = await import('./components/windowmanager.js');
+        const { initWindowManager } = await import(`./components/windowmanager.js?v=${bootVersion}`);
         initWindowManager();
         
-        const { initTopBottomBar } = await import('./src/functions/t/top-bottom-bar.js');
+        const { initTopBottomBar } = await import(`./src/functions/t/top-bottom-bar.js?v=${bootVersion}`);
         initTopBottomBar();
         log("SYSTEM", "System Chrome (Bottom Dock) Successfully bound.");
     } catch (e) {
@@ -143,7 +147,8 @@ async function bootSystem() {
     // SECTION 4: WORKSPACE ROUTING (Populating the Public Room)
     // ========================================================================
     try {
-        const { initHomeScreen } = await import('./screen-panels/home-screen.js');
+        // Cache-busted import prevents the "initHomeScreen is not a function" error
+        const { initHomeScreen } = await import(`./screen-panels/home-screen.js?v=${bootVersion}`);
         await initHomeScreen();
         log("SYSTEM", "Home screen successfully rendered inside Public Workspace.");
     } catch (e) {
@@ -260,7 +265,7 @@ async function bootSystem() {
 
             // 🚀 The Dynamic Menu Builder Function
             const populateMenu = () => {
-                dropdown.innerHTML = ''; // Clear previous items
+                dropdown.innerHTML = ''; 
 
                 const currentMode = window.TAO_ENGINE?.getWorkspaceBounds?.().mode || 'standard';
                 const designation = window.TAO_USER_CONFIG?.designation || 'Explorer';
@@ -277,7 +282,7 @@ async function bootSystem() {
                             action: async () => {
                                 console.log('[System Router] Transitioning to User Mode via menu...');
                                 try {
-                                    const { initHomeScreen } = await import('./screen-panels/home-screen.js?v=' + new Date().getTime());
+                                    const { initHomeScreen } = await import(`./screen-panels/home-screen.js?v=${Date.now()}`);
                                     await initHomeScreen();
                                 } catch (err) {}
                             }
@@ -290,13 +295,12 @@ async function bootSystem() {
                                 console.log('[System Router] Initiating Level-2 Security via menu...');
                                 if (window.TAO_TOGGLE_CHATBOX) window.TAO_TOGGLE_CHATBOX();
                                 try {
-                                    const { initTaoLogin } = await import('./components/tao-login.js?v=' + new Date().getTime());
+                                    const { initTaoLogin } = await import(`./components/tao-login.js?v=${Date.now()}`);
                                     await initTaoLogin();
                                 } catch (err) {}
                             }
                         });
                     }
-                    // Add a visual divider after the toggle option
                     menuOptions.push({ isDivider: true });
                 }
 
@@ -343,7 +347,6 @@ async function bootSystem() {
                         display: 'flex', alignItems: 'center', gap: '8px'
                     });
                     
-                    // Highlight the Mode Toggle button in TAO Blue
                     if (opt.isToggle) {
                         item.style.color = '#38bdf8'; 
                         item.style.fontWeight = 'bold';
@@ -361,13 +364,12 @@ async function bootSystem() {
                 });
             };
 
-            // Execute the dynamic builder only when clicked
             hamburgerBtn.onclick = (e) => {
                 e.stopPropagation();
                 if (dropdown.style.display === 'flex') {
                     dropdown.style.display = 'none';
                 } else {
-                    populateMenu(); // Rebuild the menu to match the active room state
+                    populateMenu(); 
                     dropdown.style.display = 'flex';
                 }
             };
@@ -398,7 +400,7 @@ async function bootSystem() {
             header.append(trafficLights, centerZone, voiceIcon);
             chatWindow.insertBefore(header, contentArea);
 
-            const { renderChatbox } = await import('./components/chatbox.js');
+            const { renderChatbox } = await import(`./components/chatbox.js?v=${bootVersion}`);
             renderChatbox(contentArea, { showChatbox: true }); 
         }, 100);
 

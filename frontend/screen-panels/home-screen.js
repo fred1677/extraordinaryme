@@ -4,41 +4,28 @@
  * 
  * THE PUBLIC ROOM (User Mode Switch)
  * ============================================================================
- * LAYPERSON EXPLANATION:
- * This script is the "Light Switch" for the Public Room. When you enter 
- * standard mode, this script turns off the lights in the Backend Room, 
- * turns on the lights in the User Room, and tells the OS to hide the top bar.
- * It builds the public desktop only ONCE on boot.
- * ============================================================================
  */
 
 import { desktopManifest } from './desktop-manifest.js';
 
 export async function initHomeScreen() {
     return new Promise((resolve) => {
-        // 1. THE LIGHT SWITCH 
         const userWorkspace = document.getElementById('user-workspace');
         const backendWorkspace = document.getElementById('backend-workspace');
         
-        if (backendWorkspace) backendWorkspace.style.display = 'none'; // Turn off backend
-        if (userWorkspace) userWorkspace.style.display = 'block';      // Turn on user mode
+        if (backendWorkspace) backendWorkspace.style.display = 'none'; 
+        if (userWorkspace) userWorkspace.style.display = 'block';      
 
-        // 2. GEOMETRY ENFORCEMENT
         if (window.TAO_ENGINE && window.TAO_ENGINE.setWorkspaceMode) {
             window.TAO_ENGINE.setWorkspaceMode('standard');
         }
 
-        // 3. PREVENT DUPLICATE MOUNTS 
-        // If the public desktop already exists, we are done. (The switch is complete).
         if (document.getElementById('tao-desktop-canvas')) {
             console.log('[System Router] Switched to Public User Mode.');
             resolve();
             return;
         }
 
-        // ====================================================================
-        // 4. DESKTOP CONSTRUCTION (Runs only once during OS Boot)
-        // ====================================================================
         const userDesignation = window.TAO_USER_CONFIG?.designation || 'Explorer';
         const userShortcuts = window.TAO_USER_CONFIG?.desktopShortcuts || ['Health'];
         if (!userShortcuts.includes('Chatbox')) userShortcuts.push('Chatbox');
@@ -51,7 +38,7 @@ export async function initHomeScreen() {
         Object.assign(desktop.style, {
             position: 'absolute', top: `${workspaceTop}px`, left: '0',
             width: '100vw', height: `calc(100vh - ${workspaceTop + workspaceBottom}px)`,
-            backgroundColor: '#000000', // Solid black curtain for user mode
+            backgroundColor: '#000000', 
             display: 'flex', alignContent: 'flex-start', flexWrap: 'wrap',
             padding: '24px 40px', gap: '30px', boxSizing: 'border-box',
             overflowY: 'auto', pointerEvents: 'auto', zIndex: '20000' 
@@ -60,25 +47,31 @@ export async function initHomeScreen() {
         const createAppIcon = (appName, iconSvg, onClickAction) => {
             const appContainer = document.createElement('div');
             appContainer.dataset.appName = appName; 
+            
+            // Touch target strictly locked to Apple's 44px minimum
             Object.assign(appContainer.style, {
                 display: 'flex', flexDirection: 'column', alignItems: 'center',
-                width: '80px', cursor: 'pointer', transition: 'transform 0.2s ease'
+                width: '44px', minHeight: '44px', cursor: 'pointer', transition: 'transform 0.2s ease'
             });
 
             const iconBox = document.createElement('div');
+            // Visible glass container scaled down to 32px
             Object.assign(iconBox.style, {
-                width: '60px', height: '60px', backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.1)',
+                width: '32px', height: '32px', backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 4px 10px rgba(0,0,0,0.5)', marginBottom: '8px',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.5)', marginBottom: '6px',
                 backdropFilter: 'blur(5px)'
             });
-            iconBox.innerHTML = iconSvg;
+            // SVG graphic inside scaled down proportionally
+            iconBox.innerHTML = `<div style="display: flex; align-items: center; justify-content: center; transform: scale(0.70); transform-origin: center;">${iconSvg}</div>`;
 
             const appLabel = document.createElement('div');
+            // Labels configured to prevent wrapping inside the tight 44px bounds
             Object.assign(appLabel.style, {
-                color: '#ffffff', fontFamily: 'sans-serif', fontSize: '12px',
-                textAlign: 'center', textShadow: '0 2px 4px rgba(0,0,0,0.8)'
+                color: '#ffffff', fontFamily: 'sans-serif', fontSize: '11px',
+                textAlign: 'center', textShadow: '0 2px 4px rgba(0,0,0,0.8)',
+                whiteSpace: 'nowrap', overflow: 'visible'
             });
             appLabel.innerText = appName;
 
@@ -119,8 +112,6 @@ export async function initHomeScreen() {
                         Object.assign(contentArea.style, { flex: '1', overflow: 'hidden', position: 'relative' });
                         appWindow.appendChild(contentArea);
 
-                        // The Smart Router in windowmanager.js will catch this and put it in the right room
-
                         if (window.TAO_ENGINE && window.TAO_ENGINE.decorateAppWindow) {
                             window.TAO_ENGINE.decorateAppWindow(appWindow, app.appName);
                         }
@@ -135,11 +126,10 @@ export async function initHomeScreen() {
             desktop.appendChild(injectedApp);
         });
 
-        // Attach the canvas specifically to the User Room
         if (userWorkspace) {
             userWorkspace.appendChild(desktop);
         } else {
-            document.body.appendChild(desktop); // Fallback
+            document.body.appendChild(desktop); 
         }
         
         resolve();
