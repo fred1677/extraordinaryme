@@ -6,13 +6,16 @@
  * A decoupled Daily Weight Tracker utilizing a Universal Date Ledger.
  * User-driven UI: No automatic onboarding prompts. Chatbox only activates 
  * to confirm deliberate historical date changes. Calculates daily weight flux.
+ * Dynamically re-renders instantly when metric/imperial units are toggled.
+ * 
+ * S3 INTEGRATION: Pushes and Pulls isolated daily payloads to AWS S3.
  * ============================================================================
  */
 
+import { getTodayStr } from '../check-today.js';
+
 var dwLedger = {}; // Structure: { "YYYY-MM-DD": { morningWeightKg: ..., eveningWeightKg: ... } }
 let profileData = null; 
-
-const getTodayStr = () => new Date().toISOString().split('T')[0];
 
 const getPreviousDateStr = (dateStr) => {
     if (!dateStr) return '';
@@ -55,20 +58,44 @@ const calculateWeightChange = (prevKg, currKg, unit) => {
     return diff > 0 ? `Gained ${absDiff} ${unitStr}` : `Lost ${absDiff} ${unitStr}`;
 };
 
-const syncDailyweightToAWS = async () => {
+// ============================================================================
+// AWS S3 CLOUD ENGINE (POST & GET)
+// ============================================================================
+const syncDailyweightToAWS = async (dateStr) => {
     const payload = { 
         userId: localStorage.getItem('TAO_SESSION_TOKEN') || 'local-dev', 
-        appName: 'health_dailyweight', 
-        stateData: dwLedger 
+        payloadData: dwLedger[dateStr], 
+        logDate: dateStr
     };
     try {
-        await fetch('/api/state/sync', {
+        await fetch('/api/extraordinaryme/health/dailyweight', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
-        console.log('[Health-dailyweight] AWS Cloud Ledger sync successful.');
-    } catch (err) { console.error('[Health-dailyweight] AWS Sync Error:', err); }
+        console.log(`[Health-dailyweight] AWS S3 payload secured for ${dateStr}.`);
+    } catch (err) { 
+        console.error('[Health-dailyweight] AWS S3 Sync Error:', err); 
+    }
+};
+
+const loadS3DataForDate = async (dateStr) => {
+    try {
+        const token = localStorage.getItem('TAO_SESSION_TOKEN') || 'local-dev';
+        const res = await fetch(`/api/extraordinaryme/health/dailyweight?userId=${token}&date=${dateStr}`);
+        
+        if (res.ok) {
+            const s3Data = await res.json();
+            if (s3Data && s3Data.payloadData) {
+                dwLedger[dateStr] = s3Data.payloadData;
+            } else if (s3Data && Object.keys(s3Data).length > 0) {
+                dwLedger[dateStr] = s3Data;
+            }
+            console.log(`[Health-dailyweight] Loaded S3 data for ${dateStr}.`);
+        }
+    } catch (err) { 
+        console.warn(`[Health-dailyweight] No S3 data found for ${dateStr}.`); 
+    }
 };
 
 const speakAmbient = (text) => {
@@ -196,6 +223,7 @@ export const createDailyweightBlock = () => {
 
                 if (confirm.toLowerCase() === 'yes') {
                     currentViewDate = newDate;
+                    await loadS3DataForDate(currentViewDate); // FETCH FROM S3 BEFORE RENDERING
                     renderDW(true);
                 } else {
                     inputs.date.value = currentViewDate;
@@ -264,11 +292,13 @@ export const createDailyweightBlock = () => {
                 tState.morningWeightKg = mVal === '' ? null : parseWeightToKg(mVal, unitPref);
                 tState.eveningWeightKg = eVal === '' ? null : parseWeightToKg(eVal, unitPref);
                 
-                await syncDailyweightToAWS();
+                await syncDailyweightToAWS(currentViewDate);
                 speakAmbient("Weight updated.");
                 
-                // Reset to today's date upon successful update
                 currentViewDate = getTodayStr(); 
+                if (!dwLedger[currentViewDate]) {
+                    await loadS3DataForDate(currentViewDate);
+                }
                 renderDW(false);
             };
             headerRow.appendChild(actionBtn);
@@ -306,26 +336,41 @@ export const createDailyweightBlock = () => {
         try {
             const token = localStorage.getItem('TAO_SESSION_TOKEN') || 'local-dev';
             
-            // 1. Fetch Profile for formatting
+            // 1. Keep Profile Fetch for Unit Preference (Postgres/Settings)
             const profRes = await fetch(`/api/state/load?userId=${token}&appName=health_profile`);
             if (profRes.ok) {
                 const pData = await profRes.json();
                 if (pData && pData.state) profileData = pData.state;
             }
 
-            // 2. Fetch Daily Weight Ledger
-            const dwRes = await fetch(`/api/state/load?userId=${token}&appName=health_dailyweight`);
-            if (dwRes.ok) {
-                const dbData = await dwRes.json();
-                if (dbData && dbData.state) dwLedger = dbData.state;
-            }
-        } catch (err) { console.warn('AWS Load failed:', err); }
+            // 2. Load Weight Data from S3
+            await loadS3DataForDate(currentViewDate);
+            const prevDate = getPreviousDateStr(currentViewDate);
+            await loadS3DataForDate(prevDate);
+            
+        } catch (err) { console.warn('Boot failed:', err); }
 
         renderDW(false);
     };
 
-    // Listen for the custom event to recalculate whenever the profile updates (e.g. Lbs -> Kg change)
-    window.addEventListener('tao-profile-updated', bootDailyWeight);
+    // Listen for OS-level Midnight Rollover
+    window.addEventListener('tao-midnight-rollover', async (e) => {
+        if (e.detail?.newDate) {
+            currentViewDate = e.detail.newDate;
+            await loadS3DataForDate(currentViewDate);
+            renderDW(false); 
+        }
+    });
+
+    // Listen for Profile Updates (Unit toggles)
+    window.addEventListener('tao-profile-updated', async (e) => {
+        if (e.detail && e.detail.profile) {
+            profileData = e.detail.profile;
+            renderDW(false);
+        } else {
+            await bootDailyWeight();
+        }
+    });
 
     // Initial load
     bootDailyWeight();

@@ -15,8 +15,9 @@
  * SECTION 5: AI ENGINES (The Local AI brain and the Cloud AI fallback)
  * SECTION 6: ADVERTISING (The billboard system for free-tier users)
  * SECTION 7: UNIVERSAL APP STATE MANAGER (Dynamic JSONB Database for ANY OS App)
- * SECTION 8: FALLBACK ROUTING (Keeping users inside the OS interface)
- * SECTION 9: SERVER IGNITION (Starting the engine)
+ * SECTION 7.5: UNIVERSAL MODULE ROUTING (S3 Integration)
+ * SECTION 7.6: DATABASE-DRIVEN DESKTOP (App Registry & RBAC Traffic Cop)
+ * SECTION 8: SERVER IGNITION (Starting the engine)
  * ============================================================================
  */
 
@@ -243,6 +244,9 @@ app.post('/api/auth/verify-taouser', async (req, res) => {
         res.status(500).json({ success: false, error: 'Internal server error.' });
     }
 });
+
+// 🚀 ADDED: User Account & OS Clearance Management Router
+app.use('/api/users', require('./routes/Mnguser-backend.js'));
 
 
 // ============================================================================
@@ -504,22 +508,26 @@ app.get('/api/state/load', async (req, res) => {
 
 
 // ============================================================================
-// SECTION 8: FALLBACK ROUTING (Keeping Users in the Matrix)
+// SECTION 7.5: UNIVERSAL MODULE ROUTING (S3 Integration)
 // ============================================================================
+app.use('/api/extraordinaryme', require('./routes/extraordinaryme'));
 
+
+// ============================================================================
+// SECTION 7.6: DATABASE-DRIVEN DESKTOP (App Registry)
+// ============================================================================
 /**
- * Route: GET *
- * Layperson Explanation: If a user tries to refresh the page or type a weird URL 
- * in their browser, this catches them and smoothly drops them back onto the TAO 
- * OS desktop screen instead of showing an ugly "404 Page Not Found" error.
+ * Endpoint: GET /api/system/apps (Handled inside routes/system.js)
+ * Layperson Explanation: The "Traffic Cop" for your desktop. When the frontend 
+ * loads, it asks this route for its apps. This router checks the database, 
+ * verifies the user's security clearance (RBAC), and only sends back the icons 
+ * they are allowed to see.
  */
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../frontend/index.html'));
-});
+app.use('/api/system', require('./routes/system.js'));
 
 
 // ============================================================================
-// SECTION 9: SERVER IGNITION (Starting the Engine)
+// SECTION 8: SERVER IGNITION (Starting the Engine)
 // ============================================================================
 
 /**

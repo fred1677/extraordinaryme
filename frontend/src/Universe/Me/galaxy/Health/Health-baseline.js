@@ -5,8 +5,9 @@
  * DESCRIPTION: 
  * A decoupled Weight Baseline Component. Pulls static biological data from the 
  * Profile block to calculate Ideal Weight, BMI bounds, and Calorie targets. 
- * Renders full structural UI with null placeholders if profile is empty.
- * Listens for 'tao-profile-updated' to dynamically recalculate on the fly.
+ * Renders full structural UI, features native dropdowns for goal setting, 
+ * and auto-updates dynamically when metric/imperial units are toggled or 
+ * biological profile stats change. Retains exact user targets upon editing.
  * ============================================================================
  */
 
@@ -16,10 +17,34 @@
 const baselineState = {
     startingDate: '', 
     targetWeightKg: 0,
+    targetGoal: '',         // Stored as universal key: 'maintain', 'lose_1.0', etc.
+    targetDailyCalories: 0, 
     hasCompletedOnboarding: false
 };
 
 let profileData = null; // Read-only anchor data from Health-profile
+
+const GOAL_OPTIONS = [
+    { id: 'maintain', offset: 0, imp: 'Maintain Weight', met: 'Maintain Weight' },
+    { id: 'lose_0.5', offset: -250, imp: 'Lose 0.5 lb/wk', met: 'Lose 0.25 kg/wk' },
+    { id: 'lose_1.0', offset: -500, imp: 'Lose 1.0 lb/wk', met: 'Lose 0.5 kg/wk' },
+    { id: 'lose_2.0', offset: -1000, imp: 'Lose 2.0 lb/wk', met: 'Lose 1.0 kg/wk' },
+    { id: 'gain_0.5', offset: 250, imp: 'Gain 0.5 lb/wk', met: 'Gain 0.25 kg/wk' },
+    { id: 'gain_1.0', offset: 500, imp: 'Gain 1.0 lb/wk', met: 'Gain 0.5 kg/wk' }
+];
+
+// Helper to convert older saved strings to universal keys
+const mapLegacyGoal = (goalStr) => {
+    if (!goalStr) return 'maintain';
+    // If it is already a valid key, return it immediately to prevent falling back to 'maintain'
+    if (GOAL_OPTIONS.some(g => g.id === goalStr)) return goalStr; 
+    
+    const s = goalStr.toLowerCase();
+    if (s.includes('0.5 lb') || s.includes('0.25 kg')) return s.includes('lose') ? 'lose_0.5' : 'gain_0.5';
+    if (s.includes('1.0 lb') || s.includes('0.5 kg')) return s.includes('lose') ? 'lose_1.0' : 'gain_1.0';
+    if (s.includes('2.0 lb') || s.includes('1.0 kg')) return 'lose_2.0';
+    return 'maintain';
+};
 
 const syncBaselineToAWS = async () => {
     const payload = { 
@@ -54,7 +79,6 @@ const parseWeightToKg = (input, unit) => {
     return unit === 'Imperial' ? val * 0.453592 : val;
 };
 
-// Calculates Ideal Weight (Min, Max, and Average of Robinson, Miller, Devine, Hamwi)
 const calculateIdealWeightKg = (heightCm, gender) => {
     const inchesOver60 = Math.max(0, (heightCm / 2.54) - 60);
     const isMale = (gender || '').toLowerCase().startsWith('m');
@@ -65,36 +89,21 @@ const calculateIdealWeightKg = (heightCm, gender) => {
     const hamwi = isMale ? 48.0 + (2.7 * inchesOver60) : 45.5 + (2.2 * inchesOver60);
 
     const weights = [robinson, miller, devine, hamwi];
-    const minKg = Math.min(...weights);
-    const maxKg = Math.max(...weights);
-    const avgKg = (robinson + miller + devine + hamwi) / 4;
-
-    return { minKg, maxKg, avgKg };
+    return { minKg: Math.min(...weights), maxKg: Math.max(...weights), avgKg: (robinson + miller + devine + hamwi) / 4 };
 };
 
-// Calculates Healthy BMI bounds (18.5 - 25.0)
 const calculateHealthyRangeKg = (heightCm) => {
     const heightM = heightCm / 100;
-    const minKg = 18.5 * (heightM * heightM);
-    const maxKg = 25.0 * (heightM * heightM);
-    return { minKg, maxKg };
+    return { minKg: 18.5 * (heightM * heightM), maxKg: 25.0 * (heightM * heightM) };
 };
 
-// Calculates Mifflin-St Jeor Sedentary Maintenance & Targets
-const calculateCalorieTargets = (age, gender, heightCm, weightKg) => {
+const calculateTargetCalories = (age, gender, heightCm, weightKg, goalOffset) => {
     const isMale = (gender || '').toLowerCase().startsWith('m');
     const safeAge = parseInt(age) || 30;
-    
     let bmr = (10 * weightKg) + (6.25 * heightCm) - (5 * safeAge);
     bmr += isMale ? 5 : -161;
-    
-    const maintain = Math.round(bmr * 1.2); // Sedentary multiplier
-    return {
-        maintain,
-        mild: maintain - 250,
-        loss: maintain - 500,
-        extreme: maintain - 1000
-    };
+    const maintain = Math.round(bmr * 1.2); 
+    return Math.max(1000, maintain + goalOffset); // Safety floor of 1000 kcal
 };
 
 const speakAmbient = (text) => {
@@ -138,11 +147,14 @@ export const createBaselineBlock = () => {
     const renderBaseline = (isEditMode) => {
         baselineBlock.innerHTML = ''; 
 
-        // Safe Fallbacks if profile is missing
         const pData = profileData || {};
         const hasBioData = pData.heightCm && pData.weightKg;
         const unitPref = pData.unitPreference || 'Imperial';
+        
+        // Ensure legacy goals are mapped correctly to universal keys
+        baselineState.targetGoal = mapLegacyGoal(baselineState.targetGoal);
 
+        // --- TOP HEADER ---
         const headerRow = document.createElement('div');
         Object.assign(headerRow.style, { display: 'flex', alignItems: 'center', flexWrap: 'wrap', marginBottom: '8px' });
         
@@ -171,103 +183,66 @@ export const createBaselineBlock = () => {
             return wrap;
         };
 
-        // UI Grid for Calculated Data
+        const wrapContainer = (children) => {
+            const wrap = document.createElement('div');
+            Object.assign(wrap.style, { display: 'flex', alignItems: 'center', whiteSpace: 'nowrap', marginRight: '16px', marginBottom: '4px' });
+            children.forEach(c => wrap.appendChild(c));
+            return wrap;
+        };
+
+        const makeLabel = (text) => {
+            const lbl = document.createElement('span');
+            lbl.innerText = text;
+            Object.assign(lbl.style, { color: '#475569', fontWeight: '500', marginRight: '6px' });
+            return lbl;
+        };
+
+        const makeInput = (val, width) => {
+            const inp = document.createElement('input');
+            inp.type = 'text'; inp.value = val;
+            Object.assign(inp.style, { width: width, padding: '4px 8px', fontSize: '13px', border: '1px solid #cbd5e1', borderRadius: '4px', outline: 'none' });
+            return inp;
+        };
+
+        // Header Population
+        const dateInput = makeInput(baselineState.startingDate || '', '110px');
+        if (isEditMode) {
+            headerRow.appendChild(wrapContainer([makeLabel('Starting Date -'), dateInput]));
+            headerRow.appendChild(makeReadField('Starting Weight', hasBioData ? formatWeight(pData.weightKg, unitPref) : '--'));
+            
+            const actionBtn = document.createElement('button');
+            actionBtn.innerText = '[Update]';
+            Object.assign(actionBtn.style, { background: 'none', border: 'none', color: '#0ea5e9', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', padding: '0', marginLeft: 'auto' });
+            
+            headerRow.appendChild(actionBtn);
+            
+        } else {
+            headerRow.appendChild(makeReadField('Starting Date', baselineState.startingDate || '--'));
+            headerRow.appendChild(makeReadField('Starting Weight', hasBioData ? formatWeight(pData.weightKg, unitPref) : '--'));
+            
+            const actionBtn = document.createElement('button');
+            actionBtn.innerText = '[Edit]';
+            Object.assign(actionBtn.style, { background: 'none', border: 'none', color: '#0ea5e9', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', padding: '0', marginLeft: 'auto' });
+            actionBtn.onclick = () => renderBaseline(true);
+            headerRow.appendChild(actionBtn);
+        }
+
+        baselineBlock.appendChild(headerRow);
+
+        // --- GRID SECTION ---
         const calcGrid = document.createElement('div');
         Object.assign(calcGrid.style, {
             display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px',
             backgroundColor: '#ffffff', padding: '12px', border: '1px solid #cbd5e1', borderRadius: '6px'
         });
 
-        // Top Row Data (Editable vs Read-Only)
-        if (isEditMode) {
-            const inputs = {};
-            const wrapContainer = (children) => {
-                const wrap = document.createElement('div');
-                Object.assign(wrap.style, { display: 'flex', alignItems: 'center', whiteSpace: 'nowrap', marginRight: '16px', marginBottom: '4px' });
-                children.forEach(c => wrap.appendChild(c));
-                return wrap;
-            };
-
-            const makeLabel = (text) => {
-                const lbl = document.createElement('span');
-                lbl.innerText = text;
-                Object.assign(lbl.style, { color: '#475569', fontWeight: '500', marginRight: '6px' });
-                return lbl;
-            };
-
-            const makeInput = (val, width) => {
-                const inp = document.createElement('input');
-                inp.type = 'text'; inp.value = val;
-                Object.assign(inp.style, { width: width, padding: '4px 8px', fontSize: '13px', border: '1px solid #cbd5e1', borderRadius: '4px', outline: 'none' });
-                return inp;
-            };
-
-            inputs.startDate = makeInput(baselineState.startingDate || '', '110px');
-            headerRow.appendChild(wrapContainer([makeLabel('Starting Date -'), inputs.startDate]));
-            
-            // Starting weight is anchored to the profile, read-only
-            headerRow.appendChild(makeReadField('Starting Weight', hasBioData ? formatWeight(pData.weightKg, unitPref) : '--'));
-
-            // Extract numeric value to edit target weight cleanly
-            const currentTargetVal = baselineState.targetWeightKg ? (unitPref === 'Imperial' 
-                ? (baselineState.targetWeightKg * 2.20462).toFixed(1) 
-                : Number(baselineState.targetWeightKg).toFixed(1)) : '';
-            
-            inputs.targetWeight = makeInput(currentTargetVal, '60px');
-            const targetWrap = wrapContainer([makeLabel('Target Weight -'), inputs.targetWeight]);
-            const targetUnitLbl = document.createElement('span'); 
-            targetUnitLbl.innerText = unitPref === 'Imperial' ? ' lbs' : ' kg'; 
-            targetUnitLbl.style.marginLeft = '4px';
-            targetWrap.appendChild(targetUnitLbl);
-            headerRow.appendChild(targetWrap);
-
-            const actionBtn = document.createElement('button');
-            actionBtn.innerText = '[Update]';
-            Object.assign(actionBtn.style, {
-                background: 'none', border: 'none', color: '#0ea5e9', cursor: 'pointer',
-                fontWeight: 'bold', fontSize: '13px', padding: '0', marginLeft: 'auto'
-            });
-
-            actionBtn.onclick = async () => {
-                baselineState.startingDate = inputs.startDate.value.trim();
-                baselineState.targetWeightKg = parseWeightToKg(inputs.targetWeight.value, unitPref);
-                
-                await syncBaselineToAWS();
-                speakAmbient("Baseline confirmed. The fields have been updated.");
-                renderBaseline(false);
-            };
-            headerRow.appendChild(actionBtn);
-
-        } else {
-            headerRow.appendChild(makeReadField('Starting Date', baselineState.startingDate || '--'));
-            headerRow.appendChild(makeReadField('Starting Weight', hasBioData ? formatWeight(pData.weightKg, unitPref) : '--'));
-            headerRow.appendChild(makeReadField('Target Weight', baselineState.targetWeightKg ? formatWeight(baselineState.targetWeightKg, unitPref) : '--', '#0ea5e9'));
-
-            const actionBtn = document.createElement('button');
-            actionBtn.innerText = '[Edit]';
-            Object.assign(actionBtn.style, {
-                background: 'none', border: 'none', color: '#0ea5e9', cursor: 'pointer',
-                fontWeight: 'bold', fontSize: '13px', padding: '0', marginLeft: 'auto'
-            });
-
-            actionBtn.onclick = () => {
-                speakAmbient("Please update your starting date or target weight and press update to confirm.");
-                renderBaseline(true); 
-            };
-            headerRow.appendChild(actionBtn);
-        }
-
-        baselineBlock.appendChild(headerRow);
-
-        // Calculate and Format Biological Data
+        // 1. Biological Anchors
         let idealWeightText = '(--)';
         let rangeText = '(--)';
-        let calStrings = { maintain: '(--)', mild: '(--)', loss: '(--)', extreme: '(--)' };
 
         if (hasBioData) {
             const idealData = calculateIdealWeightKg(pData.heightCm, pData.gender);
             const { minKg, maxKg } = calculateHealthyRangeKg(pData.heightCm);
-            const calories = calculateCalorieTargets(pData.age, pData.gender, pData.heightCm, pData.weightKg);
 
             const minIdealW = formatWeight(idealData.minKg, unitPref).replace(/ (lbs|kg)/, '');
             const maxIdealW = formatWeight(idealData.maxKg, unitPref);
@@ -275,20 +250,12 @@ export const createBaselineBlock = () => {
             idealWeightText = `${minIdealW} - ${maxIdealW} (Avg: ${avgIdealW})`;
 
             rangeText = `${formatWeight(minKg, unitPref).replace(/ (lbs|kg)/, '')} - ${formatWeight(maxKg, unitPref)}`;
-
-            calStrings = {
-                maintain: `${calories.maintain} kcal`,
-                mild: `${calories.mild} kcal`,
-                loss: `${calories.loss} kcal`,
-                extreme: `${calories.extreme} kcal`
-            };
         }
         
-        // Calculated Ideal/Healthy Weight Block
         const anchorsCol = document.createElement('div');
         anchorsCol.innerHTML = `
-            <div style="font-weight:bold; margin-bottom:8px; border-bottom:1px solid #e2e8f0; padding-bottom:4px;">Biological Anchors</div>
-            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+            <div style="font-weight:bold; margin-bottom:12px; border-bottom:1px solid #e2e8f0; padding-bottom:6px;">Biological Anchors</div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
                 <span style="color:#475569;">Ideal Weight:</span> <strong style="color:${hasBioData ? '#0f172a' : '#94a3b8'}">${idealWeightText}</strong>
             </div>
             <div style="display:flex; justify-content:space-between;">
@@ -296,23 +263,115 @@ export const createBaselineBlock = () => {
             </div>
         `;
 
-        // Calorie Targets
+        // 2. Current Goal & Targets
         const calsCol = document.createElement('div');
-        calsCol.innerHTML = `
-            <div style="font-weight:bold; margin-bottom:8px; border-bottom:1px solid #e2e8f0; padding-bottom:4px;">Daily Calorie Targets (Sedentary)</div>
-            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                <span style="color:#475569;">Maintain Weight:</span> <strong style="color:${hasBioData ? '#0f172a' : '#94a3b8'}">${calStrings.maintain}</strong>
-            </div>
-            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                <span style="color:#475569;">Mild Loss (0.5 lb/wk):</span> <strong style="color:${hasBioData ? '#0f172a' : '#94a3b8'}">${calStrings.mild}</strong>
-            </div>
-            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                <span style="color:#475569;">Weight Loss (1.0 lb/wk):</span> <strong style="color:${hasBioData ? '#0f172a' : '#94a3b8'}">${calStrings.loss}</strong>
-            </div>
-            <div style="display:flex; justify-content:space-between;">
-                <span style="color:#475569;">Extreme Loss (2.0 lb/wk):</span> <strong style="color:${hasBioData ? '#0f172a' : '#94a3b8'}">${calStrings.extreme}</strong>
-            </div>
-        `;
+        const calsHeader = document.createElement('div');
+        calsHeader.innerText = 'Current Goal & Targets';
+        Object.assign(calsHeader.style, { fontWeight: 'bold', margin: '0 0 12px 0', borderBottom: '1px solid #e2e8f0', paddingBottom: '6px', color: '#0ea5e9' });
+        calsCol.appendChild(calsHeader);
+
+        // Inputs required for Edit Mode saving
+        let targetWeightInput, goalSelect, dynCalText;
+
+        if (isEditMode) {
+            // Edit Target Weight
+            const targetWrap = document.createElement('div');
+            Object.assign(targetWrap.style, { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' });
+            targetWrap.appendChild(makeLabel('Target Weight:'));
+            
+            const currentTargetVal = baselineState.targetWeightKg ? (unitPref === 'Imperial' ? (baselineState.targetWeightKg * 2.20462).toFixed(1) : Number(baselineState.targetWeightKg).toFixed(1)) : '';
+            targetWeightInput = makeInput(currentTargetVal, '60px');
+            targetWeightInput.style.textAlign = 'right';
+            
+            const tInpWrap = document.createElement('div');
+            Object.assign(tInpWrap.style, { display: 'flex', alignItems: 'center' });
+            tInpWrap.appendChild(targetWeightInput);
+            
+            // Cleanly create the label DOM element to prevent innerHTML string recreation from destroying the input reference
+            const unitLblNode = document.createElement('span');
+            unitLblNode.innerText = unitPref === 'Imperial' ? 'lbs' : 'kg';
+            Object.assign(unitLblNode.style, { marginLeft: '6px', color: '#0f172a', fontSize: '13px', fontWeight: 'bold' });
+            tInpWrap.appendChild(unitLblNode);
+            
+            targetWrap.appendChild(tInpWrap);
+            calsCol.appendChild(targetWrap);
+
+            // Edit Selected Goal
+            const goalWrap = document.createElement('div');
+            Object.assign(goalWrap.style, { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' });
+            goalWrap.appendChild(makeLabel('Selected Goal:'));
+            
+            goalSelect = document.createElement('select');
+            Object.assign(goalSelect.style, { padding: '4px', fontSize: '13px', border: '1px solid #cbd5e1', borderRadius: '4px', outline: 'none', cursor: 'pointer' });
+            
+            GOAL_OPTIONS.forEach(opt => {
+                const o = document.createElement('option');
+                o.value = opt.id;
+                o.innerText = unitPref === 'Imperial' ? opt.imp : opt.met;
+                if (baselineState.targetGoal === opt.id) o.selected = true;
+                goalSelect.appendChild(o);
+            });
+            goalWrap.appendChild(goalSelect);
+            calsCol.appendChild(goalWrap);
+
+            // Dynamic Calories Readout
+            const calWrap = document.createElement('div');
+            Object.assign(calWrap.style, { display: 'flex', justifyContent: 'space-between', alignItems: 'center' });
+            calWrap.appendChild(makeLabel('Target Daily Calories:'));
+            
+            dynCalText = document.createElement('strong');
+            Object.assign(dynCalText.style, { color: '#0ea5e9' });
+            dynCalText.innerText = baselineState.targetDailyCalories ? `${baselineState.targetDailyCalories} kcal` : '(--)';
+            
+            goalSelect.onchange = () => {
+                if (hasBioData) {
+                    const selGoal = GOAL_OPTIONS.find(g => g.id === goalSelect.value);
+                    const newCals = calculateTargetCalories(pData.age, pData.gender, pData.heightCm, pData.weightKg, selGoal.offset);
+                    dynCalText.innerText = `${newCals} kcal`;
+                }
+            };
+
+            calWrap.appendChild(dynCalText);
+            calsCol.appendChild(calWrap);
+
+            // Attach Update Logic
+            const updateBtn = headerRow.querySelector('button');
+            updateBtn.onclick = async () => {
+                baselineState.startingDate = dateInput.value.trim();
+                
+                // Read exact value from preserved input DOM element
+                baselineState.targetWeightKg = parseWeightToKg(targetWeightInput.value, unitPref);
+                
+                const selGoalObj = GOAL_OPTIONS.find(g => g.id === goalSelect.value) || GOAL_OPTIONS[0];
+                baselineState.targetGoal = selGoalObj.id;
+                
+                if (hasBioData) {
+                    baselineState.targetDailyCalories = calculateTargetCalories(pData.age, pData.gender, pData.heightCm, pData.weightKg, selGoalObj.offset);
+                }
+                
+                await syncBaselineToAWS();
+                speakAmbient("Baseline updated.");
+                renderBaseline(false);
+            };
+
+        } else {
+            // Read-Only Goal Block
+            const tWeightDisplay = baselineState.targetWeightKg ? formatWeight(baselineState.targetWeightKg, unitPref) : '(--)';
+            const activeGoalObj = GOAL_OPTIONS.find(g => g.id === baselineState.targetGoal) || GOAL_OPTIONS[0];
+            const displayGoalString = unitPref === 'Imperial' ? activeGoalObj.imp : activeGoalObj.met;
+
+            calsCol.innerHTML += `
+                <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                    <span style="color:#475569;">Target Weight:</span> <strong style="color:${baselineState.targetWeightKg ? '#0f172a' : '#94a3b8'}">${tWeightDisplay}</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                    <span style="color:#475569;">Selected Goal:</span> <strong style="color:${baselineState.targetGoal ? '#0f172a' : '#94a3b8'}">${baselineState.targetGoal ? displayGoalString : '(--)'}</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between;">
+                    <span style="color:#475569;">Target Daily Calories:</span> <strong style="color:${baselineState.targetDailyCalories ? '#0ea5e9' : '#94a3b8'}">${baselineState.targetDailyCalories ? `${baselineState.targetDailyCalories} kcal` : '(--)'}</strong>
+                </div>
+            `;
+        }
 
         calcGrid.appendChild(anchorsCol);
         calcGrid.appendChild(calsCol);
@@ -320,14 +379,13 @@ export const createBaselineBlock = () => {
     };
 
     const runBaselineOnboarding = async () => {
-        // Automatically crunch defaults
-        baselineState.startingDate = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        const unitPref = (profileData && profileData.unitPreference) ? profileData.unitPreference : 'Imperial';
         
-        // Set the default target to the calculated average of the 4 formulas
-        baselineState.targetWeightKg = calculateIdealWeightKg(profileData.heightCm, profileData.gender).avgKg;
-        baselineState.hasCompletedOnboarding = true;
+        baselineState.startingDate = baselineState.startingDate || new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        if (!baselineState.targetWeightKg) {
+            baselineState.targetWeightKg = calculateIdealWeightKg(profileData.heightCm, profileData.gender).avgKg;
+        }
 
-        const unitPref = profileData.unitPreference || 'Imperial';
         const startW = formatWeight(profileData.weightKg, unitPref);
         const targetW = formatWeight(baselineState.targetWeightKg, unitPref);
 
@@ -335,39 +393,51 @@ export const createBaselineBlock = () => {
         if (chatWin && (chatWin.style.display === 'none' || chatWin.classList.contains('is-minimized'))) {
             if (window.TAO_TOGGLE_CHATBOX) window.TAO_TOGGLE_CHATBOX();
         }
-
         window.dispatchEvent(new CustomEvent('tao-voice-toggled', { detail: { active: true } }));
 
-        const summaryMessage = `I have calculated your baseline. Your Starting Weight is ${startW}, and your recommended Target Weight is ${targetW}. Is this correct?`;
-        
+        // Step 1: Confirm Weights
+        const summaryMessage = `Your Starting Weight is ${startW}, and your Target Weight is ${targetW}. Is this correct?`;
         const finalConfirmation = await askChatbox(summaryMessage, { choices: ['Yes', 'No'], expand: true });
+        
+        if (finalConfirmation.toLowerCase() === 'no') {
+            if (window.TAO_TOGGLE_CHATBOX) window.TAO_TOGGLE_CHATBOX(); 
+            window.dispatchEvent(new CustomEvent('tao-voice-toggled', { detail: { active: false } }));
+            renderBaseline(true);
+            speakAmbient("Please update your baseline values manually.");
+            return;
+        }
+
+        // Step 2: Establish Weekly Goal (Using Universal Keys)
+        const choiceMap = unitPref === 'Imperial' 
+            ? { 'Maintain': 'maintain', 'Lose 0.5 lb/wk': 'lose_0.5', 'Lose 1.0 lb/wk': 'lose_1.0', 'Lose 2.0 lb/wk': 'lose_2.0', 'Gain 0.5 lb/wk': 'gain_0.5', 'Gain 1.0 lb/wk': 'gain_1.0' }
+            : { 'Maintain': 'maintain', 'Lose 0.25 kg/wk': 'lose_0.5', 'Lose 0.5 kg/wk': 'lose_1.0', 'Lose 1.0 kg/wk': 'lose_2.0', 'Gain 0.25 kg/wk': 'gain_0.5', 'Gain 0.5 kg/wk': 'gain_1.0' };
+
+        const chosenString = await askChatbox("What is your specific weekly goal?", { choices: Object.keys(choiceMap), expand: true });
+        
+        const selectedKey = choiceMap[chosenString] || 'maintain';
+        const selGoalObj = GOAL_OPTIONS.find(g => g.id === selectedKey);
+
+        baselineState.targetGoal = selectedKey;
+        baselineState.targetDailyCalories = calculateTargetCalories(profileData.age, profileData.gender, profileData.heightCm, profileData.weightKg, selGoalObj.offset);
+        baselineState.hasCompletedOnboarding = true;
 
         if (window.TAO_TOGGLE_CHATBOX) window.TAO_TOGGLE_CHATBOX(); 
         window.dispatchEvent(new CustomEvent('tao-voice-toggled', { detail: { active: false } }));
 
         await syncBaselineToAWS();
-
-        if (finalConfirmation.toLowerCase() === 'yes') {
-            renderBaseline(false); 
-        } else {
-            renderBaseline(true); 
-            speakAmbient("Please update your starting date or target weight and press update to confirm.");
-        }
+        renderBaseline(false);
     };
 
-    // 🚀 INTERNAL BOOT SEQUENCE (Wrapped into a callable function)
     const bootBaseline = async () => {
         try {
             const token = localStorage.getItem('TAO_SESSION_TOKEN') || 'local-dev';
             
-            // 1. Fetch read-only Profile Data required for calculations
             const profRes = await fetch(`/api/state/load?userId=${token}&appName=health_profile`);
             if (profRes.ok) {
                 const profData = await profRes.json();
                 if (profData && profData.state) profileData = profData.state;
             }
 
-            // 2. Fetch the Baseline State
             const baseRes = await fetch(`/api/state/load?userId=${token}&appName=health_baseline`);
             if (baseRes.ok) {
                 const dbData = await baseRes.json();
@@ -381,18 +451,29 @@ export const createBaselineBlock = () => {
 
         renderBaseline(false);
 
-        // Check if onboarding needs to be triggered
-        if (profileData && profileData.weightKg && !baselineState.hasCompletedOnboarding) {
-            setTimeout(runBaselineOnboarding, 500); 
+        if (profileData && profileData.weightKg) {
+            if (!baselineState.hasCompletedOnboarding || !baselineState.targetGoal) {
+                setTimeout(() => runBaselineOnboarding(), 500); 
+            }
         }
     };
 
-    // Listen for the custom event to recalculate whenever the profile updates
-    window.addEventListener('tao-profile-updated', bootBaseline);
+    // Listen for Profile Updates (Unit toggles, biological changes)
+    window.addEventListener('tao-profile-updated', async (e) => {
+        if (e.detail && e.detail.profile) {
+            profileData = e.detail.profile;
+            if (baselineState.targetGoal && profileData.weightKg) {
+                const activeGoalObj = GOAL_OPTIONS.find(g => g.id === baselineState.targetGoal) || GOAL_OPTIONS[0];
+                baselineState.targetDailyCalories = calculateTargetCalories(profileData.age, profileData.gender, profileData.heightCm, profileData.weightKg, activeGoalObj.offset);
+                syncBaselineToAWS(); 
+            }
+            renderBaseline(false);
+        } else {
+            await bootBaseline();
+        }
+    });
 
-    // Initial load
     bootBaseline();
 
-    // Synchronously returns the HTML layout structure
     return baselineBlock;
 };

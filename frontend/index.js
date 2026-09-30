@@ -125,6 +125,18 @@ async function bootSystem() {
         GLOBAL: 'tao-os-root'         
     };
 
+    // ------------------------------------------------------------------------
+    // GLOBAL OS TIMEKEEPER (check-today.js)
+    // ------------------------------------------------------------------------
+    try {
+        log("SYSTEM", "Initializing Global OS Timekeeper...");
+        // FIX: Added the 'src/' directory so the local server can correctly route the file
+        await import(`./src/Universe/Me/galaxy/check-today.js`);
+        log("SYSTEM", "Timekeeper successfully synchronized to local timezone.");
+    } catch (e) {
+        log("ERROR", "Failed to start Timekeeper.", e.message);
+    }
+
     try {
         const { igniteEdgeAI } = await import(`./libs/ai/ai-hub.js?v=${bootVersion}`);
         await igniteEdgeAI();
@@ -147,7 +159,6 @@ async function bootSystem() {
     // SECTION 4: WORKSPACE ROUTING (Populating the Public Room)
     // ========================================================================
     try {
-        // Cache-busted import prevents the "initHomeScreen is not a function" error
         const { initHomeScreen } = await import(`./screen-panels/home-screen.js?v=${bootVersion}`);
         await initHomeScreen();
         log("SYSTEM", "Home screen successfully rendered inside Public Workspace.");
@@ -273,7 +284,6 @@ async function bootSystem() {
 
                 const menuOptions = [];
 
-                // 🚀 DYNAMIC TOGGLE: Only injected if user has backend clearance
                 if (isTaoUser) {
                     if (currentMode === 'backend') {
                         menuOptions.push({
@@ -304,7 +314,6 @@ async function bootSystem() {
                     menuOptions.push({ isDivider: true });
                 }
 
-                // Standard Power Options
                 menuOptions.push(
                     { label: 'Sleep', action: () => { 
                         const sleepScreen = document.createElement('div');
@@ -330,7 +339,6 @@ async function bootSystem() {
                     }}
                 );
 
-                // Render the array into actual HTML elements
                 menuOptions.forEach(opt => {
                     if (opt.isDivider) {
                         const divider = document.createElement('div');

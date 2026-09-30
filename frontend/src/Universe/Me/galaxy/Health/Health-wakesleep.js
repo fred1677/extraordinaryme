@@ -7,12 +7,14 @@
  * User-driven UI: No automatic onboarding prompts. Chatbox only activates 
  * to confirm deliberate historical date changes. Features separated HH:MM inputs
  * and calculates total hours slept spanning from the previous day's ledger.
+ * 
+ * S3 INTEGRATION: Pushes and Pulls isolated daily payloads to AWS S3.
  * ============================================================================
  */
 
-var wsLedger = {}; // Structure: { "YYYY-MM-DD": { wakeTime: ..., sleepTime: ... } }
+import { getTodayStr } from '../check-today.js';
 
-const getTodayStr = () => new Date().toISOString().split('T')[0];
+var wsLedger = {}; // Structure: { "YYYY-MM-DD": { wakeTime: ..., sleepTime: ... } }
 
 const getPreviousDateStr = (dateStr) => {
     if (!dateStr) return '';
@@ -82,20 +84,45 @@ const calculateSleepDuration = (sleepTimeStr, wakeTimeStr) => {
     return mins > 0 ? `${hrs} hr ${mins} min` : `${hrs} hr`;
 };
 
-const syncWakesleepToAWS = async () => {
+// ============================================================================
+// AWS S3 CLOUD ENGINE (POST & GET)
+// ============================================================================
+const syncWakesleepToAWS = async (dateStr) => {
     const payload = { 
         userId: localStorage.getItem('TAO_SESSION_TOKEN') || 'local-dev', 
-        appName: 'health_wakesleep', 
-        stateData: wsLedger 
+        payloadData: wsLedger[dateStr], 
+        logDate: dateStr
     };
     try {
-        await fetch('/api/state/sync', {
+        await fetch('/api/extraordinaryme/health/wakesleep', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
-        console.log('[Health-wakesleep] AWS Cloud Ledger sync successful.');
-    } catch (err) { console.error('[Health-wakesleep] AWS Sync Error:', err); }
+        console.log(`[Health-wakesleep] AWS S3 payload secured for ${dateStr}.`);
+    } catch (err) { 
+        console.error('[Health-wakesleep] AWS S3 Write Error:', err); 
+    }
+};
+
+const loadS3DataForDate = async (dateStr) => {
+    try {
+        const token = localStorage.getItem('TAO_SESSION_TOKEN') || 'local-dev';
+        const res = await fetch(`/api/extraordinaryme/health/wakesleep?userId=${token}&date=${dateStr}`);
+        
+        if (res.ok) {
+            const s3Data = await res.json();
+            // Robust unwrapping: Accounts for whether the backend saved just the data or the entire payload wrapper
+            if (s3Data && s3Data.payloadData) {
+                wsLedger[dateStr] = s3Data.payloadData;
+            } else if (s3Data && Object.keys(s3Data).length > 0) {
+                wsLedger[dateStr] = s3Data;
+            }
+            console.log(`[Health-wakesleep] Loaded S3 data for ${dateStr}.`);
+        }
+    } catch (err) { 
+        console.warn(`[Health-wakesleep] No S3 data found for ${dateStr}.`); 
+    }
 };
 
 const speakAmbient = (text) => {
@@ -220,6 +247,8 @@ export const createWakesleepBlock = () => {
 
                 if (confirm.toLowerCase() === 'yes') {
                     currentViewDate = newDate;
+                    // FETCH FROM S3 BEFORE RENDERING TIME TRAVEL
+                    await loadS3DataForDate(currentViewDate);
                     renderWS(true);
                 } else {
                     inputs.date.value = currentViewDate;
@@ -305,11 +334,15 @@ export const createWakesleepBlock = () => {
                 tState.wakeTime = buildTimeStr(wHH, wMM, inputs.wakeUnit.value);
                 tState.sleepTime = buildTimeStr(sHH, sMM, inputs.sleepUnit.value);
                 
-                await syncWakesleepToAWS();
+                // Write to S3
+                await syncWakesleepToAWS(currentViewDate);
                 speakAmbient("Wake up and sleep time updated.");
                 
-                // Reset to today's date upon successful update
+                // Reset to today's date and ensure S3 data is loaded for today before rendering
                 currentViewDate = getTodayStr(); 
+                if (!wsLedger[currentViewDate]) {
+                    await loadS3DataForDate(currentViewDate);
+                }
                 renderWS(false);
             };
             headerRow.appendChild(actionBtn);
@@ -342,16 +375,24 @@ export const createWakesleepBlock = () => {
         }
     };
 
-    (async () => {
-        try {
-            const token = localStorage.getItem('TAO_SESSION_TOKEN') || 'local-dev';
-            const res = await fetch(`/api/state/load?userId=${token}&appName=health_wakesleep`);
-            if (res.ok) {
-                const dbData = await res.json();
-                if (dbData && dbData.state) wsLedger = dbData.state;
-            }
-        } catch (err) { console.warn('AWS Load failed:', err); }
+    // Listen for OS-level Midnight Rollover
+    window.addEventListener('tao-midnight-rollover', async (e) => {
+        if (e.detail?.newDate) {
+            currentViewDate = e.detail.newDate;
+            await loadS3DataForDate(currentViewDate);
+            renderWS(false); 
+        }
+    });
 
+    // Boot Sequence
+    (async () => {
+        // 1. Load Today's Data directly from S3
+        await loadS3DataForDate(currentViewDate);
+        
+        // 2. Load Yesterday's Data from S3 (Required to calculate the overnight sleep duration)
+        const prevDate = getPreviousDateStr(currentViewDate);
+        await loadS3DataForDate(prevDate);
+        
         renderWS(false);
     })();
 

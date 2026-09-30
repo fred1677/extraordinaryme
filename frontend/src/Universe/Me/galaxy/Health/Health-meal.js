@@ -7,15 +7,17 @@
  * Features dynamic, stackable Meal Blocks. Each block contains its own 
  * dropdown, auto-saving text area, and isolated Nutritional Summary.
  * Includes Chatbox prompting for "Other" categories and a Trashcan system.
+ * 
+ * S3 INTEGRATION: Pushes and Pulls isolated daily payloads to AWS S3.
  * ============================================================================
  */
+
+import { getTodayStr } from '../check-today.js';
 
 var mealLedger = {}; 
 // Structure: { "YYYY-MM-DD": { active: [mealObjs], trash: [mealObjs] } }
 
 const MEAL_CATEGORIES = ['Morning Routine', 'Breakfast', 'Lunch', 'Brunch', 'Dinner', 'Snack', 'Dessert', 'Supplement', 'Other'];
-
-const getTodayStr = () => new Date().toISOString().split('T')[0];
 
 const formatDisplayDate = (dateStr) => {
     if (!dateStr) return '';
@@ -25,20 +27,44 @@ const formatDisplayDate = (dateStr) => {
 
 const generateId = () => 'meal_' + Math.random().toString(36).substr(2, 9);
 
-const syncMealsToAWS = async () => {
+// ============================================================================
+// AWS S3 CLOUD ENGINE (POST & GET)
+// ============================================================================
+const syncMealsToAWS = async (dateStr) => {
     const payload = { 
         userId: localStorage.getItem('TAO_SESSION_TOKEN') || 'local-dev', 
-        appName: 'health_meals', 
-        stateData: mealLedger 
+        payloadData: mealLedger[dateStr], 
+        logDate: dateStr 
     };
     try {
-        await fetch('/api/state/sync', {
+        await fetch('/api/extraordinaryme/health/meals', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
-        console.log('[Health-meal] AWS Cloud Ledger sync successful.');
-    } catch (err) { console.error('[Health-meal] AWS Sync Error:', err); }
+        console.log(`[Health-meal] AWS S3 payload secured for ${dateStr}.`);
+    } catch (err) { 
+        console.error('[Health-meal] AWS S3 Sync Error:', err); 
+    }
+};
+
+const loadS3DataForDate = async (dateStr) => {
+    try {
+        const token = localStorage.getItem('TAO_SESSION_TOKEN') || 'local-dev';
+        const res = await fetch(`/api/extraordinaryme/health/meals?userId=${token}&date=${dateStr}`);
+        
+        if (res.ok) {
+            const s3Data = await res.json();
+            if (s3Data && s3Data.payloadData) {
+                mealLedger[dateStr] = s3Data.payloadData;
+            } else if (s3Data && Object.keys(s3Data).length > 0) {
+                mealLedger[dateStr] = s3Data;
+            }
+            console.log(`[Health-meal] Loaded S3 data for ${dateStr}.`);
+        }
+    } catch (err) { 
+        console.warn(`[Health-meal] No S3 data found for ${dateStr}.`); 
+    }
 };
 
 function askChatbox(message, options = {}) {
@@ -91,10 +117,9 @@ export const createMealBlock = () => {
         const now = new Date();
         saveIndicator.innerText = ` • System saved at ${now.toLocaleTimeString('en-US', { hour12: true, hour: 'numeric', minute: '2-digit', second: '2-digit' })}`;
         clearTimeout(saveTimeout);
-        saveTimeout = setTimeout(syncMealsToAWS, 1500);
+        saveTimeout = setTimeout(() => syncMealsToAWS(currentViewDate), 1500);
     };
 
-    // Helper to generate the Nutritional Summary HTML to keep render logic clean
     const buildNutritionSummary = (mealData) => {
         const nutritionBlock = document.createElement('div');
         Object.assign(nutritionBlock.style, {
@@ -155,7 +180,6 @@ export const createMealBlock = () => {
         headerRow.innerHTML = '';
         contentArea.innerHTML = '';
 
-        // Safe Initialization
         if (!mealLedger[currentViewDate] || !Array.isArray(mealLedger[currentViewDate].active)) {
             mealLedger[currentViewDate] = { active: [], trash: [] };
         }
@@ -203,6 +227,7 @@ export const createMealBlock = () => {
             if (confirm.toLowerCase() === 'yes') {
                 currentViewDate = newDate;
                 isTrashOpen = false;
+                await loadS3DataForDate(currentViewDate); // FETCH S3
                 renderMeals(true);
             } else {
                 dateInput.value = currentViewDate;
@@ -230,8 +255,11 @@ export const createMealBlock = () => {
             Object.assign(actionBtn.style, { background: 'none', border: 'none', color: '#0ea5e9', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', padding: '0', marginLeft: 'auto' });
 
             actionBtn.onclick = async () => {
-                await syncMealsToAWS();
+                await syncMealsToAWS(currentViewDate);
                 currentViewDate = getTodayStr(); 
+                if (!mealLedger[currentViewDate]) {
+                    await loadS3DataForDate(currentViewDate);
+                }
                 renderMeals(false);
             };
             headerRow.appendChild(actionBtn);
@@ -242,7 +270,6 @@ export const createMealBlock = () => {
                 contentArea.appendChild(emptyMsg);
             }
 
-            // Render Each Active Meal Block
             dayData.active.forEach(meal => {
                 const blockWrapper = document.createElement('div');
                 Object.assign(blockWrapper.style, {
@@ -250,7 +277,6 @@ export const createMealBlock = () => {
                     display: 'flex', flexDirection: 'column', gap: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
                 });
 
-                // Top Row: Dropdown & Delete Button
                 const blockHeader = document.createElement('div');
                 Object.assign(blockHeader.style, { display: 'flex', alignItems: 'center', justifyContent: 'space-between' });
 
@@ -311,7 +337,6 @@ export const createMealBlock = () => {
                 blockHeader.appendChild(removeBtn);
                 blockWrapper.appendChild(blockHeader);
 
-                // Text Area
                 const mealText = document.createElement('textarea');
                 Object.assign(mealText.style, {
                     width: '100%', height: '80px', padding: '12px', fontSize: '13px', backgroundColor: '#f8fafc', 
@@ -347,7 +372,6 @@ export const createMealBlock = () => {
                 contentArea.appendChild(blockWrapper);
             });
 
-            // "Add Meal Block" Button
             const addBtnWrap = document.createElement('div');
             Object.assign(addBtnWrap.style, { display: 'flex', justifyContent: 'center', marginTop: '12px' });
             
@@ -466,16 +490,19 @@ export const createMealBlock = () => {
         }
     };
 
-    (async () => {
-        try {
-            const token = localStorage.getItem('TAO_SESSION_TOKEN') || 'local-dev';
-            const res = await fetch(`/api/state/load?userId=${token}&appName=health_meals`);
-            if (res.ok) {
-                const dbData = await res.json();
-                if (dbData && dbData.state) mealLedger = dbData.state;
-            }
-        } catch (err) { console.warn('AWS Load failed:', err); }
+    // Listen for OS-level Midnight Rollover
+    window.addEventListener('tao-midnight-rollover', async (e) => {
+        if (e.detail?.newDate) {
+            currentViewDate = e.detail.newDate;
+            isTrashOpen = false;
+            await loadS3DataForDate(currentViewDate);
+            renderMeals(false); 
+        }
+    });
 
+    (async () => {
+        // Init load directly from S3
+        await loadS3DataForDate(currentViewDate);
         renderMeals(false);
     })();
 

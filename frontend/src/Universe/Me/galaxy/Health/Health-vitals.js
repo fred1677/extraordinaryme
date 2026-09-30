@@ -6,13 +6,15 @@
  * A decoupled Vitals Tracker utilizing a Universal Date Ledger.
  * Aggressively pre-populates daily ledgers with a default template.
  * Features auto-timestamping, a Trashcan system, and Chatbox date-change loops.
+ * 
+ * S3 INTEGRATION: Pushes and Pulls isolated daily payloads to AWS S3.
  * ============================================================================
  */
 
+import { getTodayStr } from '../check-today.js';
+
 var vitalsLedger = {}; 
 // Structure: { "YYYY-MM-DD": { active: [vitalObjs], trash: [vitalObjs] } }
-
-const getTodayStr = () => new Date().toISOString().split('T')[0];
 
 const formatDisplayDate = (dateStr) => {
     if (!dateStr) return '';
@@ -22,20 +24,44 @@ const formatDisplayDate = (dateStr) => {
 
 const generateId = () => 'vital_' + Math.random().toString(36).substr(2, 9);
 
-const syncVitalsToAWS = async () => {
+// ============================================================================
+// AWS S3 CLOUD ENGINE (POST & GET)
+// ============================================================================
+const syncVitalsToAWS = async (dateStr) => {
     const payload = { 
         userId: localStorage.getItem('TAO_SESSION_TOKEN') || 'local-dev', 
-        appName: 'health_vitals', 
-        stateData: vitalsLedger 
+        payloadData: vitalsLedger[dateStr], 
+        logDate: dateStr 
     };
     try {
-        await fetch('/api/state/sync', {
+        await fetch('/api/extraordinaryme/health/vitals', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
-        console.log('[Health-vitals] AWS Cloud Ledger sync successful.');
-    } catch (err) { console.error('[Health-vitals] AWS Sync Error:', err); }
+        console.log(`[Health-vitals] AWS S3 payload secured for ${dateStr}.`);
+    } catch (err) { 
+        console.error('[Health-vitals] AWS S3 Sync Error:', err); 
+    }
+};
+
+const loadS3DataForDate = async (dateStr) => {
+    try {
+        const token = localStorage.getItem('TAO_SESSION_TOKEN') || 'local-dev';
+        const res = await fetch(`/api/extraordinaryme/health/vitals?userId=${token}&date=${dateStr}`);
+        
+        if (res.ok) {
+            const s3Data = await res.json();
+            if (s3Data && s3Data.payloadData) {
+                vitalsLedger[dateStr] = s3Data.payloadData;
+            } else if (s3Data && Object.keys(s3Data).length > 0) {
+                vitalsLedger[dateStr] = s3Data;
+            }
+            console.log(`[Health-vitals] Loaded S3 data for ${dateStr}.`);
+        }
+    } catch (err) { 
+        console.warn(`[Health-vitals] No S3 data found for ${dateStr}.`); 
+    }
 };
 
 const speakAmbient = (text) => {
@@ -95,7 +121,7 @@ export const createVitalsBlock = () => {
         const now = new Date();
         saveIndicator.innerText = ` • System saved at ${now.toLocaleTimeString('en-US', { hour12: true, hour: 'numeric', minute: '2-digit', second: '2-digit' })}`;
         clearTimeout(saveTimeout);
-        saveTimeout = setTimeout(syncVitalsToAWS, 1500);
+        saveTimeout = setTimeout(() => syncVitalsToAWS(currentViewDate), 1500);
     };
 
     const renderVitals = (isEditMode) => {
@@ -105,13 +131,13 @@ export const createVitalsBlock = () => {
         if (!vitalsLedger[currentViewDate]) vitalsLedger[currentViewDate] = { active: [], trash: [] };
         const dayData = vitalsLedger[currentViewDate];
 
-        // Failsafe Initialization: Force seed defaults if active & trash are both empty
+        // Failsafe Initialization: Force seed defaults if active & trash are both empty (New Day)
         if (dayData.active.length === 0 && dayData.trash.length === 0) {
             dayData.active.push({ id: generateId(), type: 'Blood Pressure', customName: '', value: { sys: '', dia: '' }, timestamp: '' });
             dayData.active.push({ id: generateId(), type: 'Blood Sugar', customName: '', value: '', timestamp: '' });
             dayData.active.push({ id: generateId(), type: 'Heart Rate', customName: '', value: '', timestamp: '' });
             dayData.active.push({ id: generateId(), type: 'Body Temp', customName: '', value: '', timestamp: '' });
-            syncVitalsToAWS(); // Silently save the seeded template
+            syncVitalsToAWS(currentViewDate); // Silently save the seeded template to S3
         }
 
         // --- HEADER ---
@@ -156,6 +182,7 @@ export const createVitalsBlock = () => {
             if (confirm.toLowerCase() === 'yes') {
                 currentViewDate = newDate;
                 isTrashOpen = false;
+                await loadS3DataForDate(currentViewDate); // FETCH S3 BEFORE TIME TRAVEL
                 renderVitals(true);
             } else {
                 dateInput.value = currentViewDate;
@@ -186,9 +213,12 @@ export const createVitalsBlock = () => {
             Object.assign(actionBtn.style, { background: 'none', border: 'none', color: '#0ea5e9', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', padding: '0', marginLeft: 'auto' });
 
             actionBtn.onclick = async () => {
-                await syncVitalsToAWS();
+                await syncVitalsToAWS(currentViewDate);
                 if (currentViewDate !== getTodayStr()) speakAmbient("Vitals updated. Returning to today's ledger.");
                 currentViewDate = getTodayStr(); 
+                if (!vitalsLedger[currentViewDate]) {
+                    await loadS3DataForDate(currentViewDate);
+                }
                 renderVitals(false);
             };
             headerRow.appendChild(actionBtn);
@@ -435,16 +465,19 @@ export const createVitalsBlock = () => {
         }
     };
 
-    (async () => {
-        try {
-            const token = localStorage.getItem('TAO_SESSION_TOKEN') || 'local-dev';
-            const res = await fetch(`/api/state/load?userId=${token}&appName=health_vitals`);
-            if (res.ok) {
-                const dbData = await res.json();
-                if (dbData && dbData.state) vitalsLedger = dbData.state;
-            }
-        } catch (err) { console.warn('AWS Load failed:', err); }
+    // Listen for OS-level Midnight Rollover
+    window.addEventListener('tao-midnight-rollover', async (e) => {
+        if (e.detail?.newDate) {
+            currentViewDate = e.detail.newDate;
+            isTrashOpen = false;
+            await loadS3DataForDate(currentViewDate);
+            renderVitals(false); 
+        }
+    });
 
+    (async () => {
+        // Init load directly from S3
+        await loadS3DataForDate(currentViewDate);
         renderVitals(false);
     })();
 

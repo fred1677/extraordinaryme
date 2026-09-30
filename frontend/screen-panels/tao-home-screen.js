@@ -4,6 +4,10 @@
  * 
  * THE SECURE ROOM (Backend Mode Switch)
  * ============================================================================
+ * Updated for Database-Driven Architecture.
+ * Dynamically fetches restricted administrative applications from the PostgreSQL 
+ * registry based on user clearance level and merges them with the local manifest.
+ * ============================================================================
  */
 
 import { initTopBar } from '../src/functions/t/top-bar.js';
@@ -45,18 +49,46 @@ export async function initTaoHomeScreen() {
         const userShortcuts = window.TAO_USER_CONFIG?.desktopShortcuts || ['Health'];
         if (!userShortcuts.includes('Chatbox')) userShortcuts.push('Chatbox');
 
-        const createAppIcon = (appName, iconSvg, onClickAction) => {
+        // ====================================================================
+        // HYBRID APP LOADER (Database Registry + Local Manifest)
+        // ====================================================================
+        let dbApps = [];
+        try {
+            const userId = localStorage.getItem('TAO_SESSION_TOKEN') || 'unknown';
+            const res = await fetch(`/api/system/apps?userId=${userId}`);
+            const data = await res.json();
+            if (data.success) dbApps = data.apps;
+        } catch (err) {
+            console.error('[Secure Desktop] Failed to fetch dynamic apps from database:', err);
+        }
+
+        // Map DB apps to the manifest structure for seamless rendering
+        const dynamicApps = dbApps.map(dbApp => ({
+            appName: dbApp.app_name,
+            iconPath: dbApp.icon_path,
+            modulePath: dbApp.js_file_path,
+            windowFrame: true, 
+            initMethod: 'init' + dbApp.app_name.replace(/\s+/g, '') // e.g. "App Manager" -> "initAppManager"
+        }));
+
+        // Merge static and dynamic apps. Dynamic DB apps overwrite static ones if names collide.
+        const mergedManifest = [...desktopManifest];
+        dynamicApps.forEach(dynApp => {
+            const existingIdx = mergedManifest.findIndex(m => m.appName === dynApp.appName);
+            if (existingIdx > -1) mergedManifest[existingIdx] = dynApp;
+            else mergedManifest.push(dynApp);
+        });
+
+        const createAppIcon = (appName, iconData, onClickAction) => {
             const appContainer = document.createElement('div');
             appContainer.dataset.appName = appName; 
             
-            // Touch target strictly locked to Apple's 44px minimum
             Object.assign(appContainer.style, {
                 display: 'flex', flexDirection: 'column', alignItems: 'center',
                 width: '44px', minHeight: '44px', cursor: 'pointer', transition: 'transform 0.2s ease'
             });
 
             const iconBox = document.createElement('div');
-            // Visible glass container scaled down to 32px
             Object.assign(iconBox.style, {
                 width: '32px', height: '32px', backgroundColor: 'rgba(255, 255, 255, 0.1)', 
                 borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.2)',
@@ -64,11 +96,17 @@ export async function initTaoHomeScreen() {
                 boxShadow: '0 2px 6px rgba(0,0,0,0.5)', marginBottom: '6px',
                 backdropFilter: 'blur(5px)'
             });
-            // SVG graphic inside scaled down proportionally
-            iconBox.innerHTML = `<div style="display: flex; align-items: center; justify-content: center; transform: scale(0.70); transform-origin: center;">${iconSvg}</div>`;
+
+            // Auto-detect if icon is raw SVG string or an image path (from the DB)
+            let iconHtml = '';
+            if (iconData && iconData.trim().startsWith('<svg')) {
+                iconHtml = `<div style="display: flex; align-items: center; justify-content: center; transform: scale(0.70); transform-origin: center;">${iconData}</div>`;
+            } else if (iconData) {
+                iconHtml = `<img src="${iconData}" style="width: 24px; height: 24px; object-fit: contain;" alt="${appName}">`;
+            }
+            iconBox.innerHTML = iconHtml;
 
             const appLabel = document.createElement('div');
-            // Labels configured to prevent wrapping inside the tight 44px bounds
             Object.assign(appLabel.style, {
                 color: '#f8fafc', 
                 fontFamily: 'sans-serif', fontSize: '11px',
@@ -86,12 +124,16 @@ export async function initTaoHomeScreen() {
             return appContainer;
         };
         
+        // Filter apps based on user shortcuts (System/Godmode bypasses this filter)
         const appsToRender = (userDesignation === 'System' || userDesignation === 'Godmode')
-            ? desktopManifest 
-            : desktopManifest.filter(app => userShortcuts.includes(app.appName));
+            ? mergedManifest 
+            : mergedManifest.filter(app => userShortcuts.includes(app.appName) || app.appName === 'Chatbox');
 
         appsToRender.forEach(app => {
-            const injectedApp = createAppIcon(app.appName, app.iconSvg, async () => {
+            // Use iconPath if available (from DB), otherwise fallback to hardcoded iconSvg
+            const activeIcon = app.iconPath || app.iconSvg;
+
+            const injectedApp = createAppIcon(app.appName, activeIcon, async () => {
                 console.log(`[Secure Desktop] Launching ${app.appName}...`);
                 
                 if (app.appName === 'Chatbox' || app.modulePath === 'chatbox') {
@@ -117,8 +159,17 @@ export async function initTaoHomeScreen() {
                         if (window.TAO_ENGINE && window.TAO_ENGINE.decorateAppWindow) {
                             window.TAO_ENGINE.decorateAppWindow(appWindow, app.appName);
                         }
+                        
+                        // Robust ES Module initialization fallback chain
                         if (typeof module[app.initMethod] === 'function') {
                             module[app.initMethod](contentArea);
+                        } else if (typeof module.default === 'function') {
+                            module.default(contentArea);
+                        } else {
+                            const exportKeys = Object.keys(module);
+                            const firstFuncKey = exportKeys.find(key => typeof module[key] === 'function');
+                            if (firstFuncKey) module[firstFuncKey](contentArea);
+                            else console.error(`[Desktop] No init function found in ${app.modulePath}`);
                         }
                     } else {
                         if (typeof module[app.initMethod] === 'function') module[app.initMethod]();

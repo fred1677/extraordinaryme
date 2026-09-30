@@ -153,58 +153,58 @@ CREATE INDEX idx_system_logs_time ON system_logs(created_at DESC);
  * so their workspace is ready the exact second they log in.
  */
 CREATE OR REPLACE FUNCTION provision_user_genesis_block()
-RETURNS TRIGGER AS $$
-DECLARE
-    root_id UUID;
-    layer2_id UUID;
-    layer3_id UUID;
-    layer4_id UUID;
-    layer5_id UUID;
-    layer6_id UUID;
-BEGIN
-    -- 1. Create the Master Root folder for the new user
-    INSERT INTO user_modules (owner_id, parent_id, node_type, name, ui_state)
-    VALUES (
-        NEW.id, NULL, 'universe', 'Root Universe',
-        jsonb_build_object('description', 'Master Root Directory for ' || NEW.username, 'version', '1.0.0', 'is_root', true)
-    ) RETURNING id INTO root_id;
-
-    -- 2. Create the Layer 2 Workspace (The Desktop)
-    INSERT INTO user_modules (owner_id, parent_id, node_type, name, ui_state)
-    VALUES (NEW.id, root_id, 'galaxy', 'Layer 2 User Workspace', jsonb_build_object('layer', 2.0, 'namespace', 'layer-2-base', 'highest_active_sublayer', 2.0))
-    RETURNING id INTO layer2_id;
-
-    -- 3. Create Layer 3 (The Pull-out Drawers)
-    INSERT INTO user_modules (owner_id, parent_id, node_type, name, ui_state)
-    VALUES (NEW.id, root_id, 'galaxy', 'Layer 3 Drawers', jsonb_build_object('layer', 3.0, 'namespace', 'layer-3-drawers', 'active_drawers', '[]'::jsonb))
-    RETURNING id INTO layer3_id;
-
-    -- 4. Create Layer 4 (AI Overlays)
-    INSERT INTO user_modules (owner_id, parent_id, node_type, name, ui_state)
-    VALUES (NEW.id, root_id, 'galaxy', 'Layer 4 AI Overlays', jsonb_build_object('layer', 4.0, 'namespace', 'layer-4-ai', 'active_overlays', '[]'::jsonb))
-    RETURNING id INTO layer4_id;
-
-    -- 5. Create Layer 5 (System Chrome - Top and Bottom Bars)
-    INSERT INTO user_modules (owner_id, parent_id, node_type, name, ui_state)
-    VALUES (NEW.id, root_id, 'galaxy', 'Layer 5 System Chrome', jsonb_build_object('layer', 5.0, 'namespace', 'layer-5-chrome', 'components', '["top-bar", "bottom-bar"]'::jsonb))
-    RETURNING id INTO layer5_id;
-
-    -- 6. Create Layer 6 (The Secure Lockscreen)
-    INSERT INTO user_modules (owner_id, parent_id, node_type, name, ui_state)
-    VALUES (NEW.id, root_id, 'galaxy', 'Layer 6 Lockscreen', jsonb_build_object('layer', 6.0, 'namespace', 'layer-6-lockscreen', 'is_secure', true))
-    RETURNING id INTO layer6_id;
-
-    -- 7. Save all these new layer IDs to the user's profile so the OS knows where to look
-    UPDATE users
-    SET last_session_state = jsonb_build_object(
-        'root_id', root_id, 'layer_2_id', layer2_id, 'layer_3_id', layer3_id, 
-        'layer_4_id', layer4_id, 'layer_5_id', layer5_id, 'layer_6_id', layer6_id, 
-        'active_layer', 2.0
-    )
-    WHERE id = NEW.id;
-
-    RETURN NEW;
-END;
+RETURNS TRIGGER AS $$ 
+DECLARE     
+    root_id UUID;     
+    layer2_id UUID;     
+    layer3_id UUID;     
+    layer4_id UUID;     
+    layer5_id UUID;     
+    layer6_id UUID; 
+BEGIN     
+    -- 1. Create the Master Root folder for the new user     
+    INSERT INTO user_modules (owner_id, parent_id, node_type, name, ui_state)     
+    VALUES (         
+        NEW.id, NULL, 'universe', 'Root Universe',         
+        jsonb_build_object('description', 'Master Root Directory for ' || NEW.username, 'version', '1.0.0', 'is_root', true)     
+    ) RETURNING id INTO root_id;      
+    
+    -- 2. Create the Layer 2 Workspace (The Desktop)     
+    INSERT INTO user_modules (owner_id, parent_id, node_type, name, ui_state)     
+    VALUES (NEW.id, root_id, 'galaxy', 'Layer 2 User Workspace', jsonb_build_object('layer', 2.0, 'namespace', 'layer-2-base', 'highest_active_sublayer', 2.0))     
+    RETURNING id INTO layer2_id;      
+    
+    -- 3. Create Layer 3 (The Pull-out Drawers)     
+    INSERT INTO user_modules (owner_id, parent_id, node_type, name, ui_state)     
+    VALUES (NEW.id, root_id, 'galaxy', 'Layer 3 Drawers', jsonb_build_object('layer', 3.0, 'namespace', 'layer-3-drawers', 'active_drawers', '[]'::jsonb))     
+    RETURNING id INTO layer3_id;      
+    
+    -- 4. Create Layer 4 (AI Overlays)     
+    INSERT INTO user_modules (owner_id, parent_id, node_type, name, ui_state)     
+    VALUES (NEW.id, root_id, 'galaxy', 'Layer 4 AI Overlays', jsonb_build_object('layer', 4.0, 'namespace', 'layer-4-ai', 'active_overlays', '[]'::jsonb))     
+    RETURNING id INTO layer4_id;      
+    
+    -- 5. Create Layer 5 (System Chrome - Top and Bottom Bars)     
+    INSERT INTO user_modules (owner_id, parent_id, node_type, name, ui_state)     
+    VALUES (NEW.id, root_id, 'galaxy', 'Layer 5 System Chrome', jsonb_build_object('layer', 5.0, 'namespace', 'layer-5-chrome', 'components', '["top-bar", "bottom-bar"]'::jsonb))     
+    RETURNING id INTO layer5_id;      
+    
+    -- 6. Create Layer 6 (The Secure Lockscreen)     
+    INSERT INTO user_modules (owner_id, parent_id, node_type, name, ui_state)     
+    VALUES (NEW.id, root_id, 'galaxy', 'Layer 6 Lockscreen', jsonb_build_object('layer', 6.0, 'namespace', 'layer-6-lockscreen', 'is_secure', true))     
+    RETURNING id INTO layer6_id;      
+    
+    -- 7. Save all these new layer IDs to the user's profile so the OS knows where to look     
+    UPDATE users     
+    SET last_session_state = jsonb_build_object(         
+        'root_id', root_id, 'layer_2_id', layer2_id, 'layer_3_id', layer3_id,          
+        'layer_4_id', layer4_id, 'layer_5_id', layer5_id, 'layer_6_id', layer6_id,          
+        'active_layer', 2.0     
+    )     
+    WHERE id = NEW.id;      
+    
+    RETURN NEW; 
+END; 
 $$ LANGUAGE plpgsql;
 
 -- Attach the Welcome Robot to the Users table
@@ -233,7 +233,7 @@ CREATE TABLE user_metrics (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     metric_name VARCHAR(255) NOT NULL,
-    metric_data JSONB NOT NULL,
+    s3_object_key VARCHAR(255) NOT NULL, -- Replaces the heavy JSONB column for S3 integration
     log_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -272,3 +272,63 @@ VALUES (
     '#ffd700', 
     '<h2>TAO OS Professional</h2><p>Upgrade your account to remove the top banner and unlock the full potential of your workspace geometry.</p>'
 );
+
+/**
+ * =========================================================================
+ * >>> 8. THE APP REGISTRY (Database-Driven Desktop & App Manager) <<<
+ * =========================================================================
+ * This table serves as the master software catalog for TAO OS. Instead of 
+ * hardcoding desktop application icons inside home-screen.js, the Home Screen 
+ * dynamically fetches and renders modules from this registry.
+ * 
+ * Access control is enforced via the minimum_clearance field, matching the 
+ * system roles dictionary (e.g., 'Tao', 'TheOne', 'Senior-Master', 'Master', 
+ * 'Staff-1', 'Members'). System users and administrative tiers can use the 
+ * App Manager to deploy new modules into the workspace without altering core 
+ * frontend source files.
+ */
+CREATE TABLE system_applications (
+    id SERIAL PRIMARY KEY,
+    app_name VARCHAR(50) UNIQUE NOT NULL,                     -- Unique display name for the application
+    icon_path TEXT NOT NULL,                                  -- Path to the icon image (SVG or PNG)
+    js_file_path VARCHAR(255) NOT NULL,                       -- Relative entry-point path for dynamic ES module import
+    minimum_clearance VARCHAR(50) DEFAULT 'Members',          -- Minimum RBAC role required to view on the desktop
+    is_active BOOLEAN DEFAULT true,                           -- Kill-switch toggle to hide or disable an app globally
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_system_apps_clearance ON system_applications(minimum_clearance);
+CREATE INDEX idx_system_apps_active ON system_applications(is_active);
+
+-- Pre-seed the core App Manager administrative utility (restricted to Master and higher)
+INSERT INTO system_applications (app_name, icon_path, js_file_path, minimum_clearance)
+VALUES (
+    'App Manager', 
+    '/assets/icons/app-manager.png', 
+    '../src/Universe/Me/galaxy/System/AppManager.js', 
+    'Master'
+) ON CONFLICT (app_name) DO NOTHING;
+
+/**
+ * =========================================================================
+ * >>> 9. THE ICON REGISTRY (Dynamic Icon Library) <<<
+ * =========================================================================
+ * Central repository for all SVG icons used in the OS. 
+ * Allows the App Manager to dynamically fetch available icons and enables
+ * a future Icon Manager module to upload new SVGs without touching code.
+ */
+CREATE TABLE system_icons (
+    icon_name VARCHAR(50) PRIMARY KEY,
+    svg_string TEXT NOT NULL
+);
+
+-- Seed the initial OS icon library
+INSERT INTO system_icons (icon_name, svg_string) VALUES 
+    ('App / Grid', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>'),
+    ('Profile / User', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>'),
+    ('Settings / Gear', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>'),
+    ('Me / Main', '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#eab308" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path><path d="M2 12h20"></path></svg>'),
+    ('Heart / Red', '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>'),
+    ('Mail / Blue', '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>'),
+    ('Chat / Purple', '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>'),
+    ('Ad / Yellow', '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#ffd700" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="12" rx="2" ry="2"></rect><path d="M12 16v4"></path><path d="M8 20h8"></path></svg>');

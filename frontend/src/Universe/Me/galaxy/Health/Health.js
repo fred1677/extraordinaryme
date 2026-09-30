@@ -6,20 +6,30 @@
  * The primary Health application module. 
  * Acts as the structural View layout. Delegates ALL profile, tracking, and 
  * AWS saving logic entirely to external decoupled components.
+ * Help & Snapshot execution strictly bound to Global OS signals to prevent 
+ * DOM hierarchy disconnects.
  * ============================================================================
  */
 
+import { getTodayStr } from '../check-today.js';
 import { createProfileBlock } from './Health-profile.js';
 import { createBaselineBlock } from './Health-baseline.js';
 import { createWakesleepBlock } from './Health-wakesleep.js';
 import { createDailyweightBlock } from './Health-dailyweight.js';
 import { createVitalsBlock } from './Health-vitals.js';
 import { createMealBlock } from './Health-meal.js';
-import { createExerciseBlock } from './Health-exercise.js'; // NEW IMPORT!
+import { createExerciseBlock } from './Health-exercise.js';
 
 export const localDictionary = {
     name: "health",
     commands: ["log vital", "120/80", "lb", "lbs", "sleep time", "wake up"]
+};
+
+// Formats YYYY-MM-DD into "Thursday, September 24, 2026"
+const formatHeaderDate = (ymdStr) => {
+    const [y, m, d] = ymdStr.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    return dt.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 };
 
 export async function initHealth(container) {
@@ -66,10 +76,17 @@ export async function initHealth(container) {
         display: 'flex', justifyContent: 'flex-end'
     });
     
+    // Header date synchronized with the global Timekeeper
     const dateDisplay = document.createElement('span');
-    const today = new Date();
-    dateDisplay.innerText = today.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    dateDisplay.innerText = formatHeaderDate(getTodayStr());
     Object.assign(dateDisplay.style, { color: '#64748b', fontSize: '13px', fontFamily: 'sans-serif', fontWeight: '500' });
+
+    // Listen for midnight rollover to flip header text in real time
+    window.addEventListener('tao-midnight-rollover', (e) => {
+        if (e.detail?.newDate) {
+            dateDisplay.innerText = formatHeaderDate(e.detail.newDate);
+        }
+    });
 
     headerArea.appendChild(dateDisplay);
 
@@ -101,7 +118,7 @@ export async function initHealth(container) {
     blocks.push(createDailyweightBlock());
     blocks.push(createVitalsBlock());
     blocks.push(createMealBlock());
-    blocks.push(createExerciseBlock()); // Fully Decoupled Exercise Block Mounted!
+    blocks.push(createExerciseBlock());
 
     // ========================================================================
     // SCROLL NAVIGATION
@@ -141,18 +158,41 @@ export async function initHealth(container) {
     appCanvas.appendChild(contentArea);
     targetArea.appendChild(appCanvas);
 
-    if (appWindow) {
-        appWindow.addEventListener('tao-help-clicked', async () => {
-            try {
-                const helpMod = await import('./health-help.js');
-                if (helpMod.executeHelp) helpMod.executeHelp(appWindow);
-            } catch (e) {}
+    // ========================================================================
+    // OS SIGNALS (Global OS Broadcast Listeners)
+    // ========================================================================
+    
+    // Bind global listeners only once to prevent memory leaks if app is closed/reopened
+    if (!window.TAO_HEALTH_SIGNALS_BOUND) {
+        
+        window.addEventListener('tao-global-help-clicked', async (e) => {
+            // Check if the signal was meant for the Health app
+            if (e.detail && e.detail.appName.toLowerCase() === 'health') {
+                console.log("[Health.js] Global Help Signal heard loud and clear!");
+                try {
+                    const helpMod = await import('./Health-help.js');
+                    // Execute using the exact outer window reference provided by the Window Manager
+                    if (helpMod.executeHelp) helpMod.executeHelp(e.detail.windowRef || targetArea);
+                } catch (err) {
+                    console.error('[Health] Failed to load Help module:', err);
+                }
+            }
         });
-        appWindow.addEventListener('tao-snapshot-clicked', async () => {
-            try {
-                const snapMod = await import('./health-snapshot.js');
-                if (snapMod.executeSnapshot) snapMod.executeSnapshot(appWindow);
-            } catch (e) {}
+
+        window.addEventListener('tao-global-snapshot-clicked', async (e) => {
+            // Check if the signal was meant for the Health app
+            if (e.detail && e.detail.appName.toLowerCase() === 'health') {
+                console.log("[Health.js] Global Snapshot Signal heard loud and clear!");
+                try {
+                    const snapMod = await import('./Health-snapshot.js');
+                    // Execute using the exact outer window reference provided by the Window Manager
+                    if (snapMod.executeSnapshot) snapMod.executeSnapshot(e.detail.windowRef || targetArea);
+                } catch (err) {
+                    console.error('[Health] Failed to load Snapshot module:', err);
+                }
+            }
         });
+        
+        window.TAO_HEALTH_SIGNALS_BOUND = true;
     }
 }

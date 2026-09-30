@@ -6,13 +6,15 @@
  * A decoupled Exercise Tracker utilizing a Universal Date Ledger.
  * Features a unified UI shell, an auto-saving text area, auto-timestamping, 
  * and a unified Chatbox date-change loop for historical logging.
+ * 
+ * S3 INTEGRATION: Pushes and Pulls isolated daily payloads to AWS S3.
  * ============================================================================
  */
 
+import { getTodayStr } from '../check-today.js';
+
 var exerciseLedger = {}; 
 // Structure: { "YYYY-MM-DD": { text: "...", timestamp: "..." } }
-
-const getTodayStr = () => new Date().toISOString().split('T')[0];
 
 const formatDisplayDate = (dateStr) => {
     if (!dateStr) return '';
@@ -20,20 +22,44 @@ const formatDisplayDate = (dateStr) => {
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
-const syncExerciseToAWS = async () => {
+// ============================================================================
+// AWS S3 CLOUD ENGINE (POST & GET)
+// ============================================================================
+const syncExerciseToAWS = async (dateStr) => {
     const payload = { 
         userId: localStorage.getItem('TAO_SESSION_TOKEN') || 'local-dev', 
-        appName: 'health_exercise', 
-        stateData: exerciseLedger 
+        payloadData: exerciseLedger[dateStr], 
+        logDate: dateStr
     };
     try {
-        await fetch('/api/state/sync', {
+        await fetch('/api/extraordinaryme/health/exercise', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
-        console.log('[Health-exercise] AWS Cloud Ledger sync successful.');
-    } catch (err) { console.error('[Health-exercise] AWS Sync Error:', err); }
+        console.log(`[Health-exercise] AWS S3 payload secured for ${dateStr}.`);
+    } catch (err) { 
+        console.error('[Health-exercise] AWS S3 Sync Error:', err); 
+    }
+};
+
+const loadS3DataForDate = async (dateStr) => {
+    try {
+        const token = localStorage.getItem('TAO_SESSION_TOKEN') || 'local-dev';
+        const res = await fetch(`/api/extraordinaryme/health/exercise?userId=${token}&date=${dateStr}`);
+        
+        if (res.ok) {
+            const s3Data = await res.json();
+            if (s3Data && s3Data.payloadData) {
+                exerciseLedger[dateStr] = s3Data.payloadData;
+            } else if (s3Data && Object.keys(s3Data).length > 0) {
+                exerciseLedger[dateStr] = s3Data;
+            }
+            console.log(`[Health-exercise] Loaded S3 data for ${dateStr}.`);
+        }
+    } catch (err) { 
+        console.warn(`[Health-exercise] No S3 data found for ${dateStr}.`); 
+    }
 };
 
 function askChatbox(message, options = {}) {
@@ -86,7 +112,7 @@ export const createExerciseBlock = () => {
         saveIndicator.innerText = ` • System saved at ${now.toLocaleTimeString('en-US', { hour12: true, hour: 'numeric', minute: '2-digit', second: '2-digit' })}`;
         
         clearTimeout(saveTimeout);
-        saveTimeout = setTimeout(syncExerciseToAWS, 1500);
+        saveTimeout = setTimeout(() => syncExerciseToAWS(currentViewDate), 1500);
     };
 
     const renderExercise = () => {
@@ -137,6 +163,7 @@ export const createExerciseBlock = () => {
 
             if (confirm.toLowerCase() === 'yes') {
                 currentViewDate = newDate;
+                await loadS3DataForDate(currentViewDate); // FETCH S3 BEFORE TIME TRAVEL
                 renderExercise();
             } else {
                 dateInput.value = currentViewDate;
@@ -190,16 +217,18 @@ export const createExerciseBlock = () => {
         contentArea.appendChild(timestampDisplay);
     };
 
-    (async () => {
-        try {
-            const token = localStorage.getItem('TAO_SESSION_TOKEN') || 'local-dev';
-            const res = await fetch(`/api/state/load?userId=${token}&appName=health_exercise`);
-            if (res.ok) {
-                const dbData = await res.json();
-                if (dbData && dbData.state) exerciseLedger = dbData.state;
-            }
-        } catch (err) { console.warn('AWS Load failed:', err); }
+    // Listen for OS-level Midnight Rollover
+    window.addEventListener('tao-midnight-rollover', async (e) => {
+        if (e.detail?.newDate) {
+            currentViewDate = e.detail.newDate;
+            await loadS3DataForDate(currentViewDate);
+            renderExercise(); 
+        }
+    });
 
+    (async () => {
+        // Init load directly from S3
+        await loadS3DataForDate(currentViewDate);
         renderExercise();
     })();
 

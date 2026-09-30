@@ -7,7 +7,7 @@
  * FEATURES:
  * 1. Zero-Trust Live Database Clearance Verification.
  * 2. Context-Aware Power Commands (Acts locally on the active workspace).
- * 3. Air-gapped Workspace Toggling (Tao Mode / User Mode).
+ * 3. Air-gapped Workspace Toggling (Delegated to tao-mode.js).
  * 4. Half-Duplex Voice Engine (Listens to header toggle, prevents audio feedback).
  * 5. UNIVERSAL PROMPT API (Dynamically accepts text, buttons, and awaits input).
  * 
@@ -210,11 +210,9 @@ export function renderChatbox(targetElement, options = {}) {
         // 🚀 API EXPANSION: Maximize Mode logic
         const chatWin = document.getElementById('tao-chatbox-window');
         if (chatWin) {
-            // Add a smooth transition for resizing
             chatWin.style.transition = 'width 0.3s ease, height 0.3s ease';
             
             if (expand) {
-                // Save original size so we can shrink back safely later
                 if (!chatWin.dataset.origWidth) {
                     chatWin.dataset.origWidth = chatWin.style.width || '360px';
                     chatWin.dataset.origHeight = chatWin.style.height || '500px';
@@ -222,7 +220,6 @@ export function renderChatbox(targetElement, options = {}) {
                 chatWin.style.width = '60vw';
                 chatWin.style.height = '80vh';
             } else {
-                // Shrink back to default if expand is false/missing
                 if (chatWin.dataset.origWidth) {
                     chatWin.style.width = chatWin.dataset.origWidth;
                     chatWin.style.height = chatWin.dataset.origHeight;
@@ -377,32 +374,28 @@ export function renderChatbox(targetElement, options = {}) {
             return;
         }
 
+        // ====================================================================
+        // AIR-GAPPED TRANSITION TUNNEL INTEGRATION
+        // ====================================================================
         if (['enter backend', 'tao mode'].includes(lowerCmd)) {
             if (isVoiceMode && recognition) recognition.stop();
-            const activeUserId = localStorage.getItem('TAO_SESSION_TOKEN');
-            let hasClearance = false;
-            if (activeUserId) {
-                try {
-                    const checkResponse = await fetch('/api/auth/check-clearance', {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ userId: activeUserId })
-                    });
-                    const authData = await checkResponse.json();
-                    hasClearance = authData.is_taouser === true;
-                } catch (err) { console.error("[Security] Live check failed:", err); }
-            }
-            if (!hasClearance) {
-                const denyMsg = "I don't know how to enter Tao Mode.";
-                appendMessage('tao', denyMsg);
-                speakResponse(denyMsg);
-                return;
-            }
-            appendMessage('system', 'Initiating Level-2 Security Protocol...');
-            if (window.TAO_TOGGLE_CHATBOX) window.TAO_TOGGLE_CHATBOX();
+            
+            appendMessage('system', 'Contacting Transition Tunnel...');
+            
             try {
-                const { initTaoLogin } = await import('./tao-login.js?v=' + new Date().getTime());
-                await initTaoLogin();
-            } catch (err) { appendMessage('system', 'Failed to initialize security protocol.'); }
+                // Route the request to the new dedicated Air-Gap module
+                const { triggerTaoMode } = await import('../src/functions/t/tao-mode.js?v=' + new Date().getTime());
+                const result = await triggerTaoMode();
+                
+                if (!result.success) {
+                    const denyMsg = "I don't know how to enter Tao Mode.";
+                    appendMessage('tao', denyMsg);
+                    speakResponse(denyMsg);
+                }
+            } catch (err) { 
+                console.error('[Chatbox] Failed to load Tao Mode tunnel:', err);
+                appendMessage('system', 'Security tunnel offline.'); 
+            }
             return;
         }
 
@@ -439,10 +432,8 @@ export function renderChatbox(targetElement, options = {}) {
 
     sendBtn.addEventListener('click', handleSend);
 
-    // 🚀 NEW: Dynamic Personalized Greeting
     window.addEventListener('tao-chatbox-opened', () => {
         if (messageArea.children.length === 0) {
-            // Uses the globally updated name, defaulting to 'Explorer' if empty
             const username = window.TAO_USER_CONFIG?.username || 'Explorer';
             const msg = `Hi ${username}, how may I help you?`;
             appendMessage('tao', msg);
