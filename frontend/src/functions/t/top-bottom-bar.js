@@ -42,8 +42,8 @@ export function initTopBottomBar() {
             left: '0', 
             width: '100vw',
             height: `${BAR_HEIGHT}px`,     // Size controlled locally!
-            backgroundColor: isSecureTheme ? '#0f172a' : '#ffffff', 
-            borderTop: `1px solid ${isSecureTheme ? '#1e293b' : '#e2e8f0'}`, 
+            backgroundColor: '#000000', // 🚀 Forced to solid black
+            borderTop: '1px solid #1e293b', 
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
             padding: `0 12px`, pointerEvents: 'auto', 
             zIndex: '52000', boxSizing: 'border-box', gap: '12px'
@@ -85,8 +85,8 @@ export function initTopBottomBar() {
             
             Object.assign(dockItem.style, {
                 padding: '0 10px', height: '32px', borderRadius: '6px', 
-                backgroundColor: isSecureTheme ? '#1e293b' : '#0f172a', 
-                border: `1px solid ${isSecureTheme ? '#334155' : '#1e293b'}`,
+                backgroundColor: '#0f172a', // Forced dark background for icons
+                border: '1px solid #1e293b',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
                 color: '#ffffff', fontSize: '11px', fontWeight: 'bold',
                 cursor: 'pointer', transition: 'all 0.2s ease', textTransform: 'uppercase',
@@ -115,8 +115,8 @@ export function initTopBottomBar() {
             };
             dockItem.onmouseout = () => { 
                 dockItem.style.transform = 'none'; 
-                dockItem.style.backgroundColor = isSecureTheme ? '#1e293b' : '#0f172a'; 
-                dockItem.style.borderColor = isSecureTheme ? '#334155' : '#1e293b';
+                dockItem.style.backgroundColor = '#0f172a'; // Fixed dark color
+                dockItem.style.borderColor = '#1e293b';
             };
 
             dockItem.onclick = (ev) => {
@@ -154,14 +154,14 @@ export function initTopBottomBar() {
         Object.assign(trashCan.style, {
             width: '36px', height: '36px', display: 'flex', alignItems: 'center', 
             justifyContent: 'center', cursor: 'pointer', flexShrink: '0',
-            color: isSecureTheme ? '#475569' : '#64748b', 
+            color: '#ef4444', // 🚀 Forced BRIGHT RED default
             transition: 'all 0.3s cubic-bezier(0.25, 1, 0.5, 1)'
         });
 
         trashCan.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>`;
 
-        trashCan.onmouseover = () => { trashCan.style.color = '#ef4444'; trashCan.style.transform = 'scale(1.1)'; };
-        trashCan.onmouseout = () => { trashCan.style.color = isSecureTheme ? '#475569' : '#64748b'; trashCan.style.transform = 'none'; };
+        trashCan.onmouseover = () => { trashCan.style.color = '#ff1111'; trashCan.style.transform = 'scale(1.1)'; }; // Even brighter on hover
+        trashCan.onmouseout = () => { trashCan.style.color = '#ef4444'; trashCan.style.transform = 'none'; }; // 🚀 Reset to bright red
 
         if (!window.TAO_ENGINE) window.TAO_ENGINE = {};
         if (!window.TAO_ENGINE.cinematicTrash) {
@@ -176,8 +176,8 @@ export function initTopBottomBar() {
                 elementToTrash.style.transform = `translateY(${trashCenterY}px) scale(0) rotate(360deg)`;
                 elementToTrash.style.opacity = '0';
                 
-                setTimeout(() => { activeTrash.style.transform = 'scale(1.3)'; activeTrash.style.color = '#ef4444'; }, 300);
-                setTimeout(() => { activeTrash.style.transform = 'none'; activeTrash.style.color = isSecureTheme ? '#475569' : '#64748b'; }, 500);
+                setTimeout(() => { activeTrash.style.transform = 'scale(1.3)'; activeTrash.style.color = '#ff1111'; }, 300); // Burst brighter when item hits
+                setTimeout(() => { activeTrash.style.transform = 'none'; activeTrash.style.color = '#ef4444'; }, 500); // 🚀 Reset to bright red
 
                 setTimeout(() => { elementToTrash.style.display = 'none'; elementToTrash.remove(); }, 700);
             };

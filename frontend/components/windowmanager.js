@@ -11,21 +11,26 @@ window.TAO_ENGINE = window.TAO_ENGINE || {};
 let currentWorkspaceMode = 'standard'; 
 
 window.TAO_ENGINE.getWorkspaceBounds = () => {
-    // Poll the hardware for the exact usable pixels (Handles Safari mobile bug)
     let usableHeight = window.innerHeight;
     if (window.visualViewport) {
         usableHeight = window.visualViewport.height;
     }
 
-    // 🚀 DYNAMICALLY READ SIZE: Respect the size declared by top-bottom-bar.js (Fallback to 44)
     const dockHeight = window.TAO_ENGINE.BAR_HEIGHT || 44; 
-    
-    // Calculate exactly where the dock goes from the TOP of the screen
     const dockTopPx = usableHeight - dockHeight;
 
+    // ==========================================
+    // 🚀 SINGLE SOURCE OF TRUTH: CEILING LOGIC
+    // ==========================================
+    const isSystemUser = window.TAO_USER_CONFIG?.designation === 'System' || window.TAO_USER_CONFIG?.designation === 'Godmode';
+    const isPaidTier = window.TAO_USER_CONFIG?.paidTier === 'yes' || window.TAO_USER_CONFIG?.paidTier === true;
+    
+    // Fixed height to 44px to safely hold 2 lines of text on narrow screens
+    const ceilingHeight = (!isSystemUser && !isPaidTier) ? 44 : 0;
+
     return { 
-        ceiling: 0, 
-        top: 38, 
+        ceiling: ceilingHeight, 
+        top: ceilingHeight + 46,    // Exactly 46px Top Bar height
         bottom: dockHeight, 
         usableHeight: usableHeight, 
         dockHeight: dockHeight,     
@@ -62,7 +67,7 @@ export function initWindowManager() {
                 el.style.position = 'fixed';
                 el.style.top = '0px';
                 el.style.left = '0px';
-                el.style.width = '100vw';
+                el.style.width = '100%';
                 el.style.height = `${bounds.usableHeight}px`;
                 el.style.overflow = 'hidden';
             }
@@ -72,7 +77,12 @@ export function initWindowManager() {
         openWindows.forEach(win => {
             const isSystemWindow = win.classList.contains('tao-system-window');
             if (win.classList.contains('is-maximized')) {
-                win.style.height = isSystemWindow ? `${bounds.usableHeight - bounds.bottom}px` : `${bounds.usableHeight - bounds.top - bounds.bottom}px`;
+                win.style.position = 'absolute';
+                win.style.left = '0px';
+                win.style.width = '100%'; 
+                win.style.top = isSystemWindow ? `${bounds.ceiling}px` : `${bounds.top}px`;
+                win.style.height = isSystemWindow ? `${bounds.usableHeight - bounds.ceiling - bounds.bottom}px` : `${bounds.usableHeight - bounds.top - bounds.bottom}px`;
+                win.style.margin = '0';
             }
         });
     };
@@ -88,6 +98,12 @@ export function initWindowManager() {
 
     window.TAO_ENGINE.bringToFront = (targetWindow) => {
         if (!targetWindow) return;
+        
+        if (targetWindow.id === 'tao-desktop-window') {
+            targetWindow.style.zIndex = '1';
+            return;
+        }
+
         if (parseInt(targetWindow.style.zIndex, 10) === appZIndex) return;
 
         if (targetWindow.classList.contains('tao-system-window')) {
@@ -101,21 +117,25 @@ export function initWindowManager() {
     };
 
     const physicsObserver = new MutationObserver((mutations) => {
+        let triggerResize = false;
         mutations.forEach((mutation) => {
             mutation.addedNodes.forEach((node) => {
                 if (node.nodeType === 1) {
                     const isWindow = node.classList.contains('tao-workspace-window') || 
-                                     node.classList.contains('tao-window');
+                                     node.classList.contains('tao-window') ||
+                                     node.classList.contains('tao-system-window');
+                                     
+                    if (isWindow) triggerResize = true; 
                                      
                     if (isWindow && !node.dataset.physicsEnforced) {
                         const isSystemWindow = node.classList.contains('tao-system-window');
                         const bounds = window.TAO_ENGINE.getWorkspaceBounds();
                         
                         node.style.position = 'absolute';
-                        node.style.top = isSystemWindow ? '0px' : `${bounds.top}px`;
+                        node.style.top = isSystemWindow ? `${bounds.ceiling}px` : `${bounds.top}px`;
                         node.style.left = '0px';
-                        node.style.width = '100vw';
-                        node.style.height = isSystemWindow ? `${bounds.usableHeight - bounds.bottom}px` : `${bounds.usableHeight - bounds.top - bounds.bottom}px`;
+                        node.style.width = '100%';
+                        node.style.height = isSystemWindow ? `${bounds.usableHeight - bounds.ceiling - bounds.bottom}px` : `${bounds.usableHeight - bounds.top - bounds.bottom}px`;
                         node.style.margin = '0';
                         node.style.transform = 'none'; 
                         node.classList.add('is-maximized');
@@ -125,6 +145,8 @@ export function initWindowManager() {
                 }
             });
         });
+        
+        if (triggerResize) enforceExactResize();
     });
 
     physicsObserver.observe(document.body, { childList: true, subtree: true });
@@ -144,8 +166,10 @@ export function initWindowManager() {
             
             if (win.classList.contains('is-maximized')) {
                 win.style.transition = 'top 0.3s ease, height 0.3s ease';
-                win.style.top = isSystemWindow ? '0px' : `${bounds.top}px`;
-                win.style.height = isSystemWindow ? `${bounds.usableHeight - bounds.bottom}px` : `${bounds.usableHeight - bounds.top - bounds.bottom}px`;
+                win.style.left = '0px';
+                win.style.width = '100%'; 
+                win.style.top = isSystemWindow ? `${bounds.ceiling}px` : `${bounds.top}px`;
+                win.style.height = isSystemWindow ? `${bounds.usableHeight - bounds.ceiling - bounds.bottom}px` : `${bounds.usableHeight - bounds.top - bounds.bottom}px`;
                 setTimeout(() => win.style.transition = 'none', 300);
             } else if (win.classList.contains('is-floating')) {
                 const currentTop = parseInt(win.style.top, 10) || 0;
@@ -158,8 +182,76 @@ export function initWindowManager() {
         });
     });
 
-    window.TAO_ENGINE.decorateAppWindow = (winElement, titleText) => {
+    // 🚀 NEW: Absolute Single Source of Truth for generating OS Windows
+    window.TAO_ENGINE.createWindow = (config) => {
+        const { id, title, width, height, customButtons } = config;
+        
+        let winElement = document.getElementById(id);
+        if (winElement) {
+            window.TAO_ENGINE.bringToFront(winElement);
+            return winElement.querySelector('.tao-window-content') || winElement;
+        }
+
+        winElement = document.createElement('div');
+        winElement.id = id;
+        winElement.classList.add('tao-workspace-window', 'is-floating');
+        
+        const bounds = window.TAO_ENGINE.getWorkspaceBounds();
+
+        Object.assign(winElement.style, {
+            position: 'absolute',
+            top: `${bounds.top + 20}px`, 
+            left: '5vw',
+            width: width || '80vw',
+            height: height || '75vh',
+            minWidth: '300px',
+            maxWidth: '95vw',
+            backgroundColor: '#ffffff',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            borderRadius: '12px',
+            boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
+            pointerEvents: 'auto',
+            zIndex: '21000'
+        });
+
+        winElement.dataset.origWidth = winElement.style.width;
+        winElement.dataset.origHeight = winElement.style.height;
+        winElement.dataset.origTop = winElement.style.top;
+        winElement.dataset.origLeft = winElement.style.left;
+
+        const contentArea = document.createElement('div');
+        contentArea.className = 'tao-window-content';
+        Object.assign(contentArea.style, {
+            flex: '1', width: '100%', height: '100%', position: 'relative',
+            display: 'flex', flexDirection: 'column', overflow: 'hidden'
+        });
+        winElement.appendChild(contentArea);
+
+        // Pass custom buttons directly to the decorator
+        window.TAO_ENGINE.decorateAppWindow(winElement, { title, customButtons });
+
+        const targetContainer = document.getElementById('user-workspace') || document.body;
+        targetContainer.appendChild(winElement);
+        window.TAO_ENGINE.bringToFront(winElement);
+
+        return contentArea; 
+    };
+
+    // 🚀 Upgraded to cleanly inject buttons dynamically
+    window.TAO_ENGINE.decorateAppWindow = (winElement, options) => {
         if (winElement.querySelector('.tao-window-header')) return;
+
+        let titleText = 'Application';
+        let customButtons = null;
+
+        if (typeof options === 'string') {
+            titleText = options;
+        } else if (options) {
+            titleText = options.title || 'Application';
+            customButtons = options.customButtons || null;
+        }
 
         let targetContainerId = 'tao-os-root'; 
 
@@ -184,11 +276,14 @@ export function initWindowManager() {
 
         const header = document.createElement('div');
         header.className = 'tao-window-header';
+        
         Object.assign(header.style, {
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            height: '38px', backgroundColor: '#0f172a', borderBottom: '1px solid #1e293b',
+            height: '46px', // 🚀 Safely kept at 46px
+            backgroundColor: '#0f172a', borderBottom: '1px solid #1e293b',
             padding: '0 12px', cursor: 'grab', userSelect: 'none', position: 'relative',
-            flexShrink: '0', touchAction: 'none' 
+            flexShrink: '0', touchAction: 'none',
+            width: '100%', boxSizing: 'border-box'
         });
 
         const cleanTitle = titleText ? titleText.replace(/\.js/gi, '') : 'Application';
@@ -257,9 +352,9 @@ export function initWindowManager() {
                 
                 winElement.classList.remove('is-floating');
                 winElement.classList.add('is-maximized');
-                winElement.style.width = '100vw';
-                winElement.style.height = isSystemWindow ? `${bounds.usableHeight - bounds.bottom}px` : `${bounds.usableHeight - bounds.top - bounds.bottom}px`;
-                winElement.style.top = isSystemWindow ? '0px' : `${bounds.top}px`;
+                winElement.style.width = '100%'; 
+                winElement.style.height = isSystemWindow ? `${bounds.usableHeight - bounds.ceiling - bounds.bottom}px` : `${bounds.usableHeight - bounds.top - bounds.bottom}px`;
+                winElement.style.top = isSystemWindow ? `${bounds.ceiling}px` : `${bounds.top}px`;
                 winElement.style.left = '0px';
                 winElement.style.borderRadius = '0px';
                 header.style.cursor = 'default';
@@ -305,23 +400,43 @@ export function initWindowManager() {
 
         const titleSpan = document.createElement('span');
         titleSpan.innerText = cleanTitle;
-        Object.assign(titleSpan.style, { position: 'absolute', left: '50%', transform: 'translateX(-50%)', color: '#94a3b8', fontSize: '13px', fontWeight: 'bold', fontFamily: 'sans-serif', pointerEvents: 'none', whiteSpace: 'nowrap', zIndex: '1' });
+        Object.assign(titleSpan.style, { 
+            position: 'absolute', left: '0', top: '0', width: '100%', height: '100%', 
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#94a3b8', fontSize: '13px', fontWeight: 'bold', fontFamily: 'sans-serif', 
+            pointerEvents: 'none', whiteSpace: 'nowrap', zIndex: '1' 
+        });
 
         const rightZone = document.createElement('div');
-        Object.assign(rightZone.style, { display: 'flex', alignItems: 'center', gap: '12px', zIndex: '2' });
+        Object.assign(rightZone.style, { display: 'flex', alignItems: 'center', gap: '8px', zIndex: '2' });
 
-        const snapshotBtn = document.createElement('button');
-        snapshotBtn.innerText = 'Snapshot';
-        snapshotBtn.classList.add('window-action-btn');
-        Object.assign(snapshotBtn.style, { backgroundColor: 'transparent', color: '#38bdf8', border: '1px solid #0369a1', borderRadius: '4px', padding: '2px 8px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'sans-serif' });
-        
-        snapshotBtn.onclick = (e) => {
-            e.stopPropagation();
-            winElement.dispatchEvent(new CustomEvent('tao-snapshot-clicked'));
-            window.dispatchEvent(new CustomEvent('tao-global-snapshot-clicked', { detail: { appName: cleanTitle, windowRef: winElement } }));
-        };
-
-        rightZone.appendChild(snapshotBtn);
+        // 🚀 Dynamic Button Router: Custom App buttons vs Default Snapshot button
+        if (customButtons && customButtons.length > 0) {
+            customButtons.forEach(btnDef => {
+                const customBtn = document.createElement('button');
+                customBtn.innerText = btnDef.label;
+                customBtn.classList.add('window-action-btn');
+                Object.assign(customBtn.style, btnDef.style || {
+                    backgroundColor: '#0ea5e9', color: '#fff', border: 'none', 
+                    padding: '4px 12px', borderRadius: '4px', cursor: 'pointer', 
+                    fontWeight: 'bold', fontSize: '11px', fontFamily: 'sans-serif'
+                });
+                customBtn.onclick = btnDef.onClick;
+                rightZone.appendChild(customBtn);
+            });
+        } else {
+            const snapshotBtn = document.createElement('button');
+            snapshotBtn.innerText = 'Snapshot';
+            snapshotBtn.classList.add('window-action-btn');
+            Object.assign(snapshotBtn.style, { backgroundColor: 'transparent', color: '#38bdf8', border: '1px solid #0369a1', borderRadius: '4px', padding: '2px 8px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'sans-serif' });
+            
+            snapshotBtn.onclick = (e) => {
+                e.stopPropagation();
+                winElement.dispatchEvent(new CustomEvent('tao-snapshot-clicked'));
+                window.dispatchEvent(new CustomEvent('tao-global-snapshot-clicked', { detail: { appName: cleanTitle, windowRef: winElement } }));
+            };
+            rightZone.appendChild(snapshotBtn);
+        }
 
         header.appendChild(leftZone);
         header.appendChild(titleSpan);
@@ -330,14 +445,11 @@ export function initWindowManager() {
 
         if (winElement.classList.contains('is-floating')) header.style.cursor = 'grab';
 
-        // ==========================================
-        // 🚀 BULLETPROOF POINTER-EVENT RESIZE ENGINE (5-WAY)
-        // ==========================================
         if (!winElement.classList.contains('tao-system-window')) {
             const handleConfigs = [
                 { d: 's', cur: 'ns-resize', css: { bottom: '0', left: '35px', right: '35px', height: '25px' } },
-                { d: 'e', cur: 'ew-resize', css: { right: '0', top: '38px', bottom: '35px', width: '25px' } },
-                { d: 'w', cur: 'ew-resize', css: { left: '0', top: '38px', bottom: '35px', width: '25px' } },
+                { d: 'e', cur: 'ew-resize', css: { right: '0', top: '46px', bottom: '35px', width: '25px' } }, 
+                { d: 'w', cur: 'ew-resize', css: { left: '0', top: '46px', bottom: '35px', width: '25px' } }, 
                 { d: 'se', cur: 'nwse-resize', css: { bottom: '0', right: '0', width: '40px', height: '40px' } },
                 { d: 'sw', cur: 'nesw-resize', css: { bottom: '0', left: '0', width: '40px', height: '40px' } }
             ];
@@ -376,7 +488,7 @@ export function initWindowManager() {
                     if (!document.getElementById('tao-drag-blocker')) {
                         const blocker = document.createElement('div');
                         blocker.id = 'tao-drag-blocker';
-                        Object.assign(blocker.style, { position: 'fixed', top: '0', left: '0', width: '100vw', height: '100vh', zIndex: '999999', cursor: conf.cur });
+                        Object.assign(blocker.style, { position: 'fixed', top: '0', left: '0', width: '100%', height: '100vh', zIndex: '999999', cursor: conf.cur });
                         document.body.appendChild(blocker);
                     }
                 };
@@ -422,14 +534,17 @@ export function initWindowManager() {
                         if (ev.pointerId !== e.pointerId) return;
                         endResize();
                         try { h.releasePointerCapture(e.pointerId); } catch(err) {}
-                        h.removeEventListener('pointermove', onMove);
-                        h.removeEventListener('pointerup', onUp);
-                        h.removeEventListener('pointercancel', onUp);
+                        
+                        // 🚀 BIND REMOVAL TO WINDOW (FIXES CHROME DROP BUG)
+                        window.removeEventListener('pointermove', onMove);
+                        window.removeEventListener('pointerup', onUp);
+                        window.removeEventListener('pointercancel', onUp);
                     };
 
-                    h.addEventListener('pointermove', onMove);
-                    h.addEventListener('pointerup', onUp);
-                    h.addEventListener('pointercancel', onUp);
+                    // 🚀 BIND TO WINDOW TO GUARANTEE RELEASE IN CHROME
+                    window.addEventListener('pointermove', onMove, { passive: false });
+                    window.addEventListener('pointerup', onUp);
+                    window.addEventListener('pointercancel', onUp);
                 });
             });
         }
@@ -462,7 +577,7 @@ export function initWindowManager() {
         e.preventDefault(); 
         
         const bounds = window.TAO_ENGINE.getWorkspaceBounds();
-        const minTop = activeWindow.classList.contains('tao-system-window') ? 0 : bounds.top;
+        const minTop = activeWindow.classList.contains('tao-system-window') ? bounds.ceiling : bounds.top;
         
         const rect = activeWindow.getBoundingClientRect();
         const minX = 0;

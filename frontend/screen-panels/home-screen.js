@@ -47,12 +47,14 @@ export async function initHomeScreen() {
         });
 
         if (window.TAO_ENGINE && window.TAO_ENGINE.decorateAppWindow) {
-            window.TAO_ENGINE.decorateAppWindow(desktopWin, 'Home Screen');
+            window.TAO_ENGINE.decorateAppWindow(desktopWin, 'me.sphere');
         }
 
         const header = desktopWin.querySelector('.tao-window-header');
         if (header) {
             header.style.cursor = 'default';
+            header.style.backgroundColor = '#ffffff'; 
+            header.style.borderBottom = '1px solid #e2e8f0';
 
             const actionBtns = header.querySelectorAll('.window-action-btn, .chat-trigger-btn');
             actionBtns.forEach(btn => btn.remove());
@@ -62,23 +64,34 @@ export async function initHomeScreen() {
                 leftZone.firstChild.remove(); 
             }
 
+            const titleSpan = header.querySelector('span');
+            if (titleSpan) {
+                titleSpan.innerHTML = `
+                    <div style="display: flex; align-items: center; justify-content: center;">
+                        <img src="./src/functions/t/t-data/Me-sphere.svg" style="width: 24px; height: 24px; object-fit: contain;">
+                    </div>
+                `;
+            }
+
             const centerZone = document.createElement('div');
             Object.assign(centerZone.style, { display: 'flex', alignItems: 'center', gap: '8px', position: 'relative' });
             
             const hamburgerBtn = document.createElement('div');
-            hamburgerBtn.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>`;
-            Object.assign(hamburgerBtn.style, { cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '0 4px' });
+            hamburgerBtn.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0f172a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>`;
+            
+            Object.assign(hamburgerBtn.style, { 
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: '44px', height: '44px', borderRadius: '4px'
+            });
 
             const dropdown = document.createElement('div');
-            // 🚀 FIX: Dropdown is now attached to the global viewport, bypassing window layers entirely
             Object.assign(dropdown.style, {
-                display: 'none', position: 'fixed', top: '38px', left: '12px',
+                display: 'none', position: 'fixed', top: '44px', left: '12px', // 🚀 Dropped down to 44px
                 backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '6px',
                 boxShadow: '0 4px 15px rgba(0,0,0,0.6)', width: '200px', 
                 flexDirection: 'column', maxHeight: 'calc(100vh - 80px)', overflowY: 'auto', 
-                zIndex: '999999' // 🚀 Unbeatable Z-Index
+                zIndex: '999999' 
             });
-            // Append directly to the root body, NOT the header!
             document.body.appendChild(dropdown);
 
             const buildMenu = () => {
@@ -98,8 +111,8 @@ export async function initHomeScreen() {
                     Object.assign(scrollableAppList.style, { maxHeight: '160px', overflowY: 'auto', overscrollBehavior: 'contain' });
 
                     openWindows.forEach(win => {
-                        const titleSpan = win.querySelector('.tao-window-header span');
-                        const appName = titleSpan ? titleSpan.innerText : 'Unknown App';
+                        const winTitleSpan = win.querySelector('.tao-window-header span');
+                        const appName = winTitleSpan ? winTitleSpan.innerText : 'Unknown App';
                         
                         const itemRow = document.createElement('div');
                         Object.assign(itemRow.style, { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 14px', color: '#f8fafc', fontSize: '13px', cursor: 'pointer' });
@@ -153,8 +166,8 @@ export async function initHomeScreen() {
                     closeAllBtn.onclick = (e) => {
                         e.stopPropagation();
                         openWindows.forEach(win => {
-                            const titleSpan = win.querySelector('.tao-window-header span');
-                            const appName = titleSpan ? titleSpan.innerText : 'App';
+                            const winTitleSpan = win.querySelector('.tao-window-header span');
+                            const appName = winTitleSpan ? winTitleSpan.innerText : 'App';
                             document.dispatchEvent(new CustomEvent('tao-window-closed', { detail: { winElement: win, title: appName } }));
                             win.remove();
                         });
@@ -164,9 +177,9 @@ export async function initHomeScreen() {
                 }
 
                 const menuOptions = [
-                    { label: 'Help', action: () => { window.dispatchEvent(new CustomEvent('tao-global-help-clicked', { detail: { appName: 'Home Screen', windowRef: desktopWin } })); }},
+                    { label: 'Help', action: () => { window.dispatchEvent(new CustomEvent('tao-global-help-clicked', { detail: { appName: 'me.sphere', windowRef: desktopWin } })); }},
                     { label: 'Open Chatbox', action: () => { if (window.TAO_TOGGLE_CHATBOX) window.TAO_TOGGLE_CHATBOX(); else document.dispatchEvent(new CustomEvent('tao-open-chatbox')); }},
-                    { label: 'Take Snapshot', action: () => { window.dispatchEvent(new CustomEvent('tao-global-snapshot-clicked', { detail: { appName: 'Home Screen', windowRef: desktopWin } })); }},
+                    { label: 'Take Snapshot', action: () => { window.dispatchEvent(new CustomEvent('tao-global-snapshot-clicked', { detail: { appName: 'me.sphere', windowRef: desktopWin } })); }},
                     { isDivider: true },
                     { label: 'Sleep', action: () => { 
                         const sleepScreen = document.createElement('div');
@@ -292,7 +305,11 @@ export async function initHomeScreen() {
                     const initMethod = 'init' + app.app_name.replace(/\s+/g, '');
                     if (typeof module[initMethod] === 'function') module[initMethod](contentArea);
                     else if (typeof module.default === 'function') module.default(contentArea);
-                } catch (err) {}
+                } catch (err) {
+                    // 🚀 CRITICAL FIX: Logs missing modules instead of failing silently
+                    console.error(`[TAO OS] Failed to load module for ${app.app_name}:`, err);
+                    alert(`System Error: Could not locate the application module for ${app.app_name}. Did you rename the Javascript file?`);
+                }
             });
             desktopCanvas.appendChild(injectedApp);
         });

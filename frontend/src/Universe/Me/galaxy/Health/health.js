@@ -6,8 +6,6 @@
  * The primary Health application module. 
  * Acts as the structural View layout. Delegates ALL profile, tracking, and 
  * AWS saving logic entirely to external decoupled components.
- * Help & Snapshot execution strictly bound to Global OS signals to prevent 
- * DOM hierarchy disconnects.
  * ============================================================================
  */
 
@@ -25,7 +23,6 @@ export const localDictionary = {
     commands: ["log vital", "120/80", "lb", "lbs", "sleep time", "wake up"]
 };
 
-// Formats YYYY-MM-DD into "Thursday, September 24, 2026"
 const formatHeaderDate = (ymdStr) => {
     const [y, m, d] = ymdStr.split('-').map(Number);
     const dt = new Date(y, m - 1, d);
@@ -35,33 +32,18 @@ const formatHeaderDate = (ymdStr) => {
 export async function initHealth(container) {
     const moduleName = "Health"; 
     const safeId = "health";
-    
-    if (!container && document.getElementById(`tao-${safeId}-window`)) {
-        const existingWin = document.getElementById(`tao-${safeId}-window`);
-        if (window.TAO_ENGINE?.bringToFront) window.TAO_ENGINE.bringToFront(existingWin);
-        return;
-    }
 
     let targetArea = container;
-    let appWindow = null;
 
+    // 🚀 DELEGATE ENTIRELY TO THE OS SINGLE SOURCE OF TRUTH
     if (!targetArea) {
-        appWindow = document.createElement('div');
-        appWindow.id = `tao-${safeId}-window`;
-        appWindow.classList.add('tao-workspace-window', 'is-floating');
-        
-        Object.assign(appWindow.style, {
-            position: 'fixed', top: '15%', left: '20%', width: '65vw', height: '70vh',
-            minWidth: '360px', minHeight: '400px', backgroundColor: '#ffffff', 
-            borderRadius: '12px', boxShadow: '0 15px 50px rgba(0,0,0,0.5)',
-            display: 'flex', flexDirection: 'column', overflow: 'hidden', 
-            pointerEvents: 'auto', zIndex: '21000'
+        targetArea = window.TAO_ENGINE.createWindow({
+            id: `tao-${safeId}-window`,
+            title: moduleName,
+            width: '65vw',
+            height: '70vh'
         });
-
-        if (window.TAO_ENGINE && window.TAO_ENGINE.decorateAppWindow) {
-            window.TAO_ENGINE.decorateAppWindow(appWindow, moduleName);
-        }
-        targetArea = appWindow;
+        if (!targetArea) return; // Window was already open and brought to front
     }
 
     const appCanvas = document.createElement('div');
@@ -76,16 +58,12 @@ export async function initHealth(container) {
         display: 'flex', justifyContent: 'flex-end'
     });
     
-    // Header date synchronized with the global Timekeeper
     const dateDisplay = document.createElement('span');
     dateDisplay.innerText = formatHeaderDate(getTodayStr());
     Object.assign(dateDisplay.style, { color: '#64748b', fontSize: '13px', fontFamily: 'sans-serif', fontWeight: '500' });
 
-    // Listen for midnight rollover to flip header text in real time
     window.addEventListener('tao-midnight-rollover', (e) => {
-        if (e.detail?.newDate) {
-            dateDisplay.innerText = formatHeaderDate(e.detail.newDate);
-        }
+        if (e.detail?.newDate) dateDisplay.innerText = formatHeaderDate(e.detail.newDate);
     });
 
     headerArea.appendChild(dateDisplay);
@@ -104,9 +82,6 @@ export async function initHealth(container) {
         scrollBehavior: 'smooth', display: 'flex', flexDirection: 'column', gap: '24px', position: 'relative'
     });
 
-    // ========================================================================
-    // 🚀 MOUNT ALL DECOUPLED BLOCKS
-    // ========================================================================
     contentArea.appendChild(createProfileBlock());
     contentArea.appendChild(createBaselineBlock());
 
@@ -120,9 +95,6 @@ export async function initHealth(container) {
     blocks.push(createMealBlock());
     blocks.push(createExerciseBlock());
 
-    // ========================================================================
-    // SCROLL NAVIGATION
-    // ========================================================================
     blocks.forEach((block, index) => {
         contentArea.appendChild(block);
         
@@ -156,43 +128,28 @@ export async function initHealth(container) {
     appCanvas.appendChild(headerArea);
     appCanvas.appendChild(tabBar);
     appCanvas.appendChild(contentArea);
+    
+    // Mount the internal app frame to the OS-controlled container
     targetArea.appendChild(appCanvas);
 
-    // ========================================================================
-    // OS SIGNALS (Global OS Broadcast Listeners)
-    // ========================================================================
-    
-    // Bind global listeners only once to prevent memory leaks if app is closed/reopened
     if (!window.TAO_HEALTH_SIGNALS_BOUND) {
-        
         window.addEventListener('tao-global-help-clicked', async (e) => {
-            // Check if the signal was meant for the Health app
             if (e.detail && e.detail.appName.toLowerCase() === 'health') {
-                console.log("[Health.js] Global Help Signal heard loud and clear!");
                 try {
                     const helpMod = await import('./Health-help.js');
-                    // Execute using the exact outer window reference provided by the Window Manager
                     if (helpMod.executeHelp) helpMod.executeHelp(e.detail.windowRef || targetArea);
-                } catch (err) {
-                    console.error('[Health] Failed to load Help module:', err);
-                }
+                } catch (err) {}
             }
         });
 
         window.addEventListener('tao-global-snapshot-clicked', async (e) => {
-            // Check if the signal was meant for the Health app
             if (e.detail && e.detail.appName.toLowerCase() === 'health') {
-                console.log("[Health.js] Global Snapshot Signal heard loud and clear!");
                 try {
                     const snapMod = await import('./Health-snapshot.js');
-                    // Execute using the exact outer window reference provided by the Window Manager
                     if (snapMod.executeSnapshot) snapMod.executeSnapshot(e.detail.windowRef || targetArea);
-                } catch (err) {
-                    console.error('[Health] Failed to load Snapshot module:', err);
-                }
+                } catch (err) {}
             }
         });
-        
         window.TAO_HEALTH_SIGNALS_BOUND = true;
     }
 }
