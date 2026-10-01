@@ -10,6 +10,7 @@
  */
 
 const { Pool } = require('pg');
+const { uploadUserPayload, uploadSystemPayload } = require('../utils/s3-uploader.js'); // Import Cloudflare router
 
 const pool = new Pool({
     host: process.env.DB_HOST,
@@ -29,7 +30,7 @@ const sanitizeUserId = (id) => (id && isValidUUID(id)) ? id : SYSTEM_UUID;
 
 /**
  * ============================================================================
- * UNIVERSAL SYSTEM LOGGER
+ * UNIVERSAL SYSTEM LOGGER (Cloudflare R2 Routed)
  * ============================================================================
  */
 const createSystemLog = async (logData) => {
@@ -37,16 +38,28 @@ const createSystemLog = async (logData) => {
     const modName = logData.moduleName || logData.module_name || 'system_fallback';
     const msg = logData.message || 'No message provided';
     const type = logData.type || 'info';
-
-    const query = `
-        INSERT INTO system_logs (user_id, module_name, message, log_type) 
-        VALUES ($1, $2, $3, $4)
-    `;
     
+    // Grab exact YYYY-MM-DD for the daily folder
+    const timestamp = new Date().toISOString();
+    const today = timestamp.split('T')[0];
+
+    // 1. Structure the log data as a JSON payload
+    const logContent = JSON.stringify({
+        userId: validUserId,
+        module: modName,
+        type: type,
+        message: msg,
+        timestamp: timestamp
+    });
+
+    // 2. Generate a unique filename using the exact millisecond time
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}.json`;
+
     try {
-        await pool.query(query, [validUserId, modName, msg, type]);
+        // 3. Push directly to Cloudflare R2 into the absolute "system_logs" folder
+        await uploadSystemPayload(`system_logs/${today}`, fileName, logContent, 'application/json');
     } catch (err) {
-        console.error('[DB Logger Error]:', err.message);
+        console.error('[Cloudflare Logger Error]: Failed to route log to bucket.', err.message);
     }
 };
 

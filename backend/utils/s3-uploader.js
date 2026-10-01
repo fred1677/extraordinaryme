@@ -1,28 +1,24 @@
 // File: /backend/utils/s3-uploader.js
 
-/**
- * ============================================================================
- * AMAZON S3 DELIVERY ENGINE (The Utility)
- * ============================================================================
- * Handles both PUT (uploading) and GET (downloading) of isolated JSON payloads.
- * ============================================================================
- */
 const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 
-console.log('[AWS S3] Uploader utility initialized and ready.');
+console.log('[Cloudflare R2] Uploader utility initialized and ready.');
 
 const s3Client = new S3Client({
-    region: 'us-east-1' 
+    region: process.env.S3_REGION || 'auto',
+    endpoint: process.env.S3_ENDPOINT,
+    credentials: {
+        accessKeyId: process.env.S3_ACCESS_KEY,
+        secretAccessKey: process.env.S3_SECRET_KEY
+    }
 });
 
-/**
- * uploadUserPayload (POST)
- */
+// 1. Original User Payload Uploader
 async function uploadUserPayload(userId, s3Prefix, fileName, fileContent, mimeType) {
     const s3ObjectKey = `${userId}/${s3Prefix}/${fileName}`; 
 
     const command = new PutObjectCommand({
-        Bucket: 'extraordinaryme-storage',
+        Bucket: process.env.S3_BUCKET_NAME,
         Key: s3ObjectKey,
         Body: fileContent,
         ContentType: mimeType
@@ -30,29 +26,46 @@ async function uploadUserPayload(userId, s3Prefix, fileName, fileContent, mimeTy
 
     try {
         await s3Client.send(command);
-        console.log(`[AWS S3] Successfully uploaded: ${s3ObjectKey}`);
+        console.log(`[Cloudflare R2] Successfully uploaded: ${s3ObjectKey}`);
         return s3ObjectKey; 
     } catch (error) {
-        console.error(`[AWS S3 Error] Failed to upload ${s3ObjectKey}:`, error);
+        console.error(`[Cloudflare R2 Error] Failed to upload ${s3ObjectKey}:`, error);
         throw error;
     }
 }
 
-/**
- * downloadUserPayload (GET)
- * Retrieves a specific file from S3 and converts the stream to a JSON object.
- */
+// 2. NEW: Global System Payload Uploader (Bypasses User ID)
+async function uploadSystemPayload(s3Prefix, fileName, fileContent, mimeType) {
+    // This ensures the path starts exactly with your Cloudflare prefix (e.g., 'system_logs/...')
+    const s3ObjectKey = `${s3Prefix}/${fileName}`; 
+
+    const command = new PutObjectCommand({
+        Bucket: process.env.S3_BUCKET_NAME,
+        Key: s3ObjectKey,
+        Body: fileContent,
+        ContentType: mimeType
+    });
+
+    try {
+        await s3Client.send(command);
+        console.log(`[Cloudflare R2] Successfully uploaded system file: ${s3ObjectKey}`);
+        return s3ObjectKey; 
+    } catch (error) {
+        console.error(`[Cloudflare R2 Error] Failed to upload system file ${s3ObjectKey}:`, error);
+        throw error;
+    }
+}
+
 async function downloadUserPayload(userId, s3Prefix, fileName) {
     const s3ObjectKey = `${userId}/${s3Prefix}/${fileName}`; 
 
     const command = new GetObjectCommand({
-        Bucket: 'extraordinaryme-storage',
+        Bucket: process.env.S3_BUCKET_NAME,
         Key: s3ObjectKey
     });
 
     try {
         const response = await s3Client.send(command);
-        // AWS S3 returns a stream. We must convert the stream to a string.
         const streamToString = (stream) =>
             new Promise((resolve, reject) => {
                 const chunks = [];
@@ -62,18 +75,16 @@ async function downloadUserPayload(userId, s3Prefix, fileName) {
             });
 
         const bodyContents = await streamToString(response.Body);
-        return JSON.parse(bodyContents); // Return the parsed JSON object
+        return JSON.parse(bodyContents); 
 
     } catch (error) {
-        // If the file doesn't exist (e.g., they haven't saved anything for this date yet),
-        // we just return null so the frontend can render a blank slate.
         if (error.name === 'NoSuchKey') {
             return null;
         }
-        console.error(`[AWS S3 Error] Failed to download ${s3ObjectKey}:`, error);
+        console.error(`[Cloudflare R2 Error] Failed to download ${s3ObjectKey}:`, error);
         throw error;
     }
 }
 
-// Export BOTH tools so extraordinaryme.js can use them.
-module.exports = { uploadUserPayload, downloadUserPayload };
+// Export the new utility
+module.exports = { uploadUserPayload, uploadSystemPayload, downloadUserPayload };
