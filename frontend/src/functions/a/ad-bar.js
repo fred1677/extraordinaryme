@@ -2,7 +2,7 @@
  * ============================================================================
  * MODULE: /frontend/src/functions/a/ad-bar.js
  * DESCRIPTION: Generates the top monetization bar with a battery-efficient 
- * interval rotation system (Load -> Pause -> Swap).
+ * interval rotation system, pulling live inventory from PostgreSQL.
  * ============================================================================
  */
 
@@ -54,38 +54,73 @@ export function renderAdBar(height) {
 
     adContainer.appendChild(adContent);
 
-    // Simulated Ad Inventory
-    const adInventory = [
-        { text: "🌟 UPGRADE TO PREMIUM: Remove ads & unlock Ultra AI.", color: "#fbbf24", link: "#premium" },
-        { text: "ADVERTISEMENT: Sponsor Space Available", color: "#64748b", link: "#sponsor" },
-        { text: "🚀 TAO OS PRO: 1TB Cloud Storage included. Click to upgrade.", color: "#38bdf8", link: "#pro" },
-        { text: "ADVERTISEMENT: Global reach for your brand.", color: "#64748b", link: "#sponsor" }
-    ];
-
+    let adInventory = [];
     let currentIndex = 0;
 
-    adContent.innerText = adInventory[0].text;
-    adContent.style.color = adInventory[0].color;
+    // Default loading state
+    adContent.innerText = "Loading active promotions...";
+    adContent.style.color = "#64748b";
+
+    const updateAdVisuals = () => {
+        if (adInventory.length === 0) return;
+        const currentAd = adInventory[currentIndex];
+        
+        // Maps the backend database fields to your frontend visuals
+        adContent.innerText = currentAd.text || currentAd.headline || "Advertisement";
+        adContent.style.color = currentAd.color || currentAd.text_color || "#fbbf24";
+        adContainer.style.backgroundColor = currentAd.backgroundColor || currentAd.bg_color || "#0f172a";
+    };
     
     adContent.onclick = () => {
-        console.log(`[Ad System] User clicked ad routing to: ${adInventory[currentIndex].link}`);
+        if (adInventory.length === 0) return;
+        const currentAd = adInventory[currentIndex];
+        const targetUrl = currentAd.link || currentAd.target_url;
+        
+        console.log(`[Ad System] User clicked ad routing to: ${targetUrl || 'internal'}`);
+        
+        if (currentAd.type === 'external' && targetUrl) {
+            window.open(targetUrl, '_blank');
+        } else {
+            console.log(`[Ad System] Triggering internal OS page for: ${currentAd.campaign}`);
+            // Future-proofing: Call your 1-page internal vendor pop-up here
+        }
     };
 
-    // ==========================================
-    // THE BATTERY-FRIENDLY ROTATION ENGINE
-    // ==========================================
-    window.TAO_AD_INTERVAL = setInterval(() => {
-        adContent.style.opacity = '0';
-        
-        setTimeout(() => {
-            currentIndex = (currentIndex + 1) % adInventory.length;
-            adContent.innerText = adInventory[currentIndex].text;
-            adContent.style.color = adInventory[currentIndex].color;
-            
-            adContent.style.opacity = '1';
-        }, 600); 
+    // 🚀 FETCH LIVE ADS FROM POSTGRESQL DATABASE
+    fetch('/api/ads')
+        .then(res => res.json())
+        .then(data => {
+            if (data && data.length > 0) {
+                adInventory = data;
+                updateAdVisuals();
 
-    }, 8000); 
+                // ==========================================
+                // THE BATTERY-FRIENDLY ROTATION ENGINE
+                // ==========================================
+                if (adInventory.length > 1) {
+                    window.TAO_AD_INTERVAL = setInterval(() => {
+                        adContent.style.opacity = '0';
+                        
+                        setTimeout(() => {
+                            currentIndex = (currentIndex + 1) % adInventory.length;
+                            updateAdVisuals();
+                            adContent.style.opacity = '1';
+                        }, 600); 
+
+                    }, 8000); 
+                }
+            } else {
+                // Original fallback if the database is empty
+                adContent.innerText = "🌟 UPGRADE TO PREMIUM: Remove ads & unlock Ultra AI.";
+                adContent.style.color = "#fbbf24";
+            }
+        })
+        .catch(err => {
+            console.error('[Ad System] Failed to load database inventory:', err);
+            // Original fallback if the database connection fails
+            adContent.innerText = "🌟 UPGRADE TO PREMIUM: Remove ads & unlock Ultra AI.";
+            adContent.style.color = "#fbbf24";
+        });
 
     return adContainer; 
 }

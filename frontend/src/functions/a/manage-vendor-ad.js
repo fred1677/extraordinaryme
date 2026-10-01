@@ -1,163 +1,205 @@
 /**
  * ============================================================================
  * MODULE: /frontend/src/functions/a/manage-vendor-ad.js
- * DESCRIPTION: Admin dashboard to Add, Update, and Delete ad vendors in the database.
+ * DESCRIPTION: Self-serve portal to Add and Manage Advertisements.
  * ============================================================================
  */
 
+console.log('[Ad Manager] Module successfully imported by OS.');
+
 export async function initAdManager(mountElement) {
-    let editingAdId = null;
+    console.log('[Ad Manager] Execution started.');
+
+    // 🚀 SAFETY FALLBACK: If the OS generic launcher doesn't pass the container, find it
+    if (!mountElement) {
+        const activeWin = document.querySelector('.tao-workspace-window:last-child');
+        mountElement = activeWin ? (activeWin.querySelector('.tao-window-content') || activeWin) : document.body;
+    }
+
+    // Clear out any previous content
+    mountElement.innerHTML = '';
 
     const container = document.createElement('div');
     Object.assign(container.style, {
-        padding: '20px', fontFamily: 'Arial, sans-serif', color: '#333',
-        backgroundColor: '#f8fafc', width: '100%', height: '100%', overflowY: 'auto'
+        padding: '24px', fontFamily: 'sans-serif', color: '#1e293b',
+        backgroundColor: '#f8fafc', width: '100%', height: '100%', 
+        overflowY: 'auto', boxSizing: 'border-box'
     });
 
-    const title = document.createElement('h2');
-    title.innerText = 'Vendor Ad Management';
-    container.appendChild(title);
+    const header = document.createElement('h2');
+    header.innerText = 'Ad Campaign Manager';
+    header.style.marginTop = '0';
+    container.appendChild(header);
 
-    // --- ADD / UPDATE VENDOR FORM ---
+    // ==========================================
+    // THE AD CREATION FORM
+    // ==========================================
     const form = document.createElement('form');
     Object.assign(form.style, {
-        display: 'flex', flexDirection: 'column', gap: '10px', 
-        backgroundColor: '#fff', padding: '15px', border: '1px solid #cbd5e1', borderRadius: '4px',
-        marginBottom: '20px'
+        display: 'flex', flexDirection: 'column', gap: '16px', 
+        backgroundColor: '#ffffff', padding: '20px', 
+        border: '1px solid #e2e8f0', borderRadius: '8px',
+        boxShadow: '0 4px 6px rgba(0,0,0,0.05)', marginBottom: '24px'
     });
 
     form.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <h3 id="form-title" style="margin: 0 0 10px 0;">Add New Vendor</h3>
-            <button type="button" id="cancel-edit-btn" style="display: none; background: #ef4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Cancel Edit</button>
+        <h3 style="margin: 0; font-size: 16px; color: #0f172a;">Create New Advertisement</h3>
+        
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 12px; font-weight: bold; color: #64748b;">Campaign / Advertiser Name</label>
+            <input type="text" id="ad-campaign" placeholder="e.g., Classic Watch Case Co." required style="padding: 10px; border: 1px solid #cbd5e1; border-radius: 4px;">
         </div>
-        <input type="text" id="ad-campaign" placeholder="Campaign Name (e.g., AWS Hosting)" required style="padding: 8px;">
-        <input type="text" id="ad-headline" placeholder="Headline (Max 50 chars)" maxlength="50" required style="padding: 8px;">
-        <input type="text" id="ad-subtext" placeholder="Subtext (Max 60 chars)" maxlength="60" required style="padding: 8px;">
-        <input type="url" id="ad-url" placeholder="Target URL (Leave blank for 1-Page Internal Ad)" style="padding: 8px;">
-        <textarea id="ad-internal-content" placeholder="1-Page Ad Content (If no URL provided)" style="padding: 8px; height: 80px;"></textarea>
-        <div style="display: flex; gap: 10px;">
-            <label>BG Color: <input type="color" id="ad-bg" value="#050505"></label>
-            <label>Text Color: <input type="color" id="ad-text" value="#ffffff"></label>
+
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 12px; font-weight: bold; color: #64748b;">Ad Display Text</label>
+            <input type="text" id="ad-text" placeholder="e.g., ⌚ Shop premium watch cases made in the USA." required style="padding: 10px; border: 1px solid #cbd5e1; border-radius: 4px;">
         </div>
-        <button type="submit" id="submit-ad-btn" style="padding: 10px; background: #000; color: #fff; border: none; cursor: pointer; font-weight: bold;">Save Vendor Ad</button>
+
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 12px; font-weight: bold; color: #64748b;">Target Website (Optional)</label>
+            <input type="url" id="ad-url" placeholder="e.g., https://cwccousa.com" style="padding: 10px; border: 1px solid #cbd5e1; border-radius: 4px;">
+            <span style="font-size: 11px; color: #94a3b8;">If provided, clicking the ad will open this website.</span>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+            <label style="font-size: 12px; font-weight: bold; color: #64748b;">Internal Page Content (If no website exists)</label>
+            <textarea id="ad-internal-content" placeholder="Type the HTML or text for their custom landing page here..." style="padding: 10px; border: 1px solid #cbd5e1; border-radius: 4px; height: 100px; resize: vertical;"></textarea>
+        </div>
+
+        <div style="display: flex; gap: 20px;">
+            <label style="font-size: 12px; font-weight: bold; color: #64748b; display: flex; align-items: center; gap: 8px;">
+                Background Color: <input type="color" id="ad-bg" value="#0f172a" style="cursor: pointer;">
+            </label>
+            <label style="font-size: 12px; font-weight: bold; color: #64748b; display: flex; align-items: center; gap: 8px;">
+                Text Color: <input type="color" id="ad-text-color" value="#38bdf8" style="cursor: pointer;">
+            </label>
+        </div>
+
+        <button type="submit" id="submit-ad-btn" style="padding: 12px; background: #0ea5e9; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px; margin-top: 8px;">
+            Publish Advertisement
+        </button>
     `;
-
-    const resetForm = () => {
-        form.reset();
-        editingAdId = null;
-        document.getElementById('form-title').innerText = 'Add New Vendor';
-        document.getElementById('submit-ad-btn').innerText = 'Save Vendor Ad';
-        document.getElementById('cancel-edit-btn').style.display = 'none';
-    };
-
-    form.querySelector('#cancel-edit-btn').onclick = resetForm;
 
     form.onsubmit = async (e) => {
         e.preventDefault();
+        const submitBtn = document.getElementById('submit-ad-btn');
+        submitBtn.innerText = 'Publishing...';
+        submitBtn.style.background = '#94a3b8';
+
         const targetUrl = document.getElementById('ad-url').value;
         
         const payload = {
             campaign: document.getElementById('ad-campaign').value,
-            headline: document.getElementById('ad-headline').value,
-            subtext: document.getElementById('ad-subtext').value,
-            target_url: targetUrl || null,
+            text: document.getElementById('ad-text').value,
+            link: targetUrl || 'internal-page',
             type: targetUrl ? 'external' : 'internal',
-            internal_page_content: document.getElementById('ad-internal-content').value,
-            bg_color: document.getElementById('ad-bg').value,
-            text_color: document.getElementById('ad-text').value
+            internal_content: document.getElementById('ad-internal-content').value,
+            backgroundColor: document.getElementById('ad-bg').value,
+            color: document.getElementById('ad-text-color').value
         };
 
-        const method = editingAdId ? 'PUT' : 'POST';
-        const endpoint = editingAdId ? `/api/ads/${editingAdId}` : '/api/ads';
+        try {
+            // Pushes the ad to your PostgreSQL backend via your API
+            const response = await fetch('/api/ads', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
 
-        await fetch(endpoint, {
-            method: method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        
-        loadAds(); 
-        resetForm();
+            if (response.ok) {
+                form.reset();
+                
+                // Show a green success confirmation on the button
+                submitBtn.innerText = '✅ Ad Saved Successfully!';
+                submitBtn.style.background = '#10b981'; 
+                
+                // Reset the button back to default after 3 seconds
+                setTimeout(() => {
+                    submitBtn.innerText = 'Publish Advertisement';
+                    submitBtn.style.background = '#0ea5e9';
+                }, 3000);
+
+                loadAds(); // Refresh the list below
+            } else {
+                throw new Error('Failed to save to database');
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Error saving ad. Ensure backend /api/ads route is active.');
+            submitBtn.innerText = 'Publish Advertisement';
+            submitBtn.style.background = '#0ea5e9';
+        }
     };
 
     container.appendChild(form);
 
-    // --- VENDOR TABLE ---
+    // ==========================================
+    // THE ACTIVE ADS TABLE
+    // ==========================================
     const tableContainer = document.createElement('div');
     container.appendChild(tableContainer);
 
     const loadAds = async () => {
-        tableContainer.innerHTML = 'Loading vendors...';
+        tableContainer.innerHTML = '<p style="color: #64748b; font-size: 14px;">Loading active campaigns...</p>';
         try {
             const response = await fetch('/api/ads');
+            if (!response.ok) throw new Error('API not reachable');
+            
             const ads = await response.json();
             
             if (ads.length === 0) {
-                tableContainer.innerHTML = 'No active campaigns.';
+                tableContainer.innerHTML = '<p style="color: #64748b; font-size: 14px;">No active campaigns in database.</p>';
                 return;
             }
 
-            let html = `<table style="width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #cbd5e1;">
-                <tr style="background: #e2e8f0; text-align: left;">
-                    <th style="padding: 10px; border-bottom: 1px solid #cbd5e1;">Campaign</th>
-                    <th style="padding: 10px; border-bottom: 1px solid #cbd5e1;">Type</th>
-                    <th style="padding: 10px; border-bottom: 1px solid #cbd5e1;">Actions</th>
+            let html = `
+            <h3 style="margin: 0 0 12px 0; font-size: 16px; color: #0f172a;">Active Ad Inventory</h3>
+            <table style="width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                <tr style="background: #f1f5f9; text-align: left; font-size: 12px; color: #475569;">
+                    <th style="padding: 12px; border-bottom: 1px solid #e2e8f0;">Campaign</th>
+                    <th style="padding: 12px; border-bottom: 1px solid #e2e8f0;">Type</th>
+                    <th style="padding: 12px; border-bottom: 1px solid #e2e8f0;">Actions</th>
                 </tr>`;
             
             ads.forEach(ad => {
-                // Store full object in data attribute for easy editing
-                const adDataStr = encodeURIComponent(JSON.stringify(ad));
-                html += `<tr>
-                    <td style="padding: 10px; border-bottom: 1px solid #cbd5e1;">${ad.campaign}</td>
-                    <td style="padding: 10px; border-bottom: 1px solid #cbd5e1; text-transform: uppercase; font-size: 12px;">${ad.type}</td>
-                    <td style="padding: 10px; border-bottom: 1px solid #cbd5e1; display: flex; gap: 10px;">
-                        <button class="edit-ad-btn" data-ad="${adDataStr}" style="color: #0284c7; cursor: pointer; background: none; border: none; font-weight: bold;">Edit</button>
-                        <button class="delete-ad-btn" data-id="${ad.id}" style="color: red; cursor: pointer; background: none; border: none;">Remove</button>
+                html += `
+                <tr style="font-size: 13px;">
+                    <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; font-weight: bold;">${ad.campaign}</td>
+                    <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">
+                        <span style="background: ${ad.type === 'external' ? '#dcfce7' : '#e0e7ff'}; color: ${ad.type === 'external' ? '#166534' : '#3730a3'}; padding: 2px 8px; border-radius: 12px; font-size: 11px; text-transform: uppercase;">
+                            ${ad.type}
+                        </span>
+                    </td>
+                    <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">
+                        <button class="delete-ad-btn" data-id="${ad.id}" style="color: #ef4444; cursor: pointer; background: none; border: none; font-weight: bold;">Delete</button>
                     </td>
                 </tr>`;
             });
             html += `</table>`;
             tableContainer.innerHTML = html;
 
-            // Bind Edit events
-            tableContainer.querySelectorAll('.edit-ad-btn').forEach(btn => {
-                btn.onclick = (e) => {
-                    const ad = JSON.parse(decodeURIComponent(e.target.getAttribute('data-ad')));
-                    editingAdId = ad.id;
-                    
-                    document.getElementById('form-title').innerText = `Editing: ${ad.campaign}`;
-                    document.getElementById('submit-ad-btn').innerText = 'Update Vendor Ad';
-                    document.getElementById('cancel-edit-btn').style.display = 'block';
-
-                    document.getElementById('ad-campaign').value = ad.campaign;
-                    document.getElementById('ad-headline').value = ad.headline;
-                    document.getElementById('ad-subtext').value = ad.subtext;
-                    document.getElementById('ad-url').value = ad.target_url || '';
-                    document.getElementById('ad-internal-content').value = ad.internal_page_content || '';
-                    document.getElementById('ad-bg').value = ad.bg_color || '#050505';
-                    document.getElementById('ad-text').value = ad.text_color || '#ffffff';
-                    
-                    form.scrollIntoView({ behavior: 'smooth' });
-                };
-            });
-
-            // Bind Delete events
             tableContainer.querySelectorAll('.delete-ad-btn').forEach(btn => {
                 btn.onclick = async (e) => {
                     const adId = e.target.getAttribute('data-id');
-                    if (window.confirm('Permanently remove this vendor?')) {
+                    if (window.confirm('Stop running this ad?')) {
                         await fetch(`/api/ads/${adId}`, { method: 'DELETE' });
-                        if (editingAdId == adId) resetForm(); // Clear form if deleting the currently edited ad
                         loadAds();
                     }
                 };
             });
         } catch (err) {
-            tableContainer.innerHTML = 'Failed to load database inventory.';
+            tableContainer.innerHTML = `
+                <div style="background: #fef2f2; border: 1px solid #fca5a5; padding: 16px; border-radius: 8px; color: #991b1b;">
+                    <strong>Database Connection Required:</strong><br> 
+                    The frontend App is ready, but it cannot reach the backend API (<code>/api/ads</code>) to save data to PostgreSQL.
+                </div>`;
         }
     };
 
     loadAds();
     mountElement.appendChild(container);
 }
+
+// 🚀 BULLETPROOF OS EXPORTS: Ensure any generic desktop launcher can execute this file
+export default initAdManager;
+export { initAdManager as init, initAdManager as mount };
