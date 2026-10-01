@@ -611,4 +611,17 @@ export function initWindowManager() {
     document.addEventListener('pointermove', handleGlobalDragMove, { passive: false });
     document.addEventListener('pointerup', handleGlobalDragEnd);
     document.addEventListener('pointercancel', handleGlobalDragEnd);
+
+    // 🚀 NEW: Dynamically load Ad-Bar if the user is Free Tier
+    const currentBounds = window.TAO_ENGINE.getWorkspaceBounds();
+    if (currentBounds.ceiling > 0) {
+        import('../src/functions/a/ad-bar.js')
+            .then(module => {
+                // We must actually call the function and append it to the document!
+                const adElement = module.renderAdBar(currentBounds.ceiling);
+                document.body.appendChild(adElement);
+                console.log('[Window Manager] Ad-bar successfully mounted and rendered.');
+            })
+            .catch(err => console.error('[Window Manager] Ad-bar blocked or missing:', err));
+    }
 }
