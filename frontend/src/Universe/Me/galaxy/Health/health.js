@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * MODULE: /frontend/src/Universe/Me/galaxy/Health/Health.js
+ * MODULE: /frontend/src/Universe/Me/galaxy/Health/health.js
  * 
  * DESCRIPTION:
  * The primary Health application module. 
@@ -10,13 +10,13 @@
  */
 
 import { getTodayStr } from '../check-today.js';
-import { createProfileBlock } from './Health-profile.js';
-import { createBaselineBlock } from './Health-baseline.js';
-import { createWakesleepBlock } from './Health-wakesleep.js';
-import { createDailyweightBlock } from './Health-dailyweight.js';
-import { createVitalsBlock } from './Health-vitals.js';
-import { createMealBlock } from './Health-meal.js';
-import { createExerciseBlock } from './Health-exercise.js';
+import { createProfileBlock } from './health-profile.js';
+import { createBaselineBlock } from './health-baseline.js';
+import { createWakesleepBlock } from './health-wakesleep.js';
+import { createDailyweightBlock } from './health-dailyweight.js';
+import { createVitalsBlock } from './health-vitals.js';
+import { createMealBlock } from './health-meal.js';
+import { createExerciseBlock } from './health-exercise.js';
 
 export const localDictionary = {
     name: "health",
@@ -43,7 +43,7 @@ export async function initHealth(container) {
             width: '65vw',
             height: '70vh'
         });
-        if (!targetArea) return; // Window was already open and brought to front
+        if (!targetArea) return; 
     }
 
     const appCanvas = document.createElement('div');
@@ -128,26 +128,30 @@ export async function initHealth(container) {
     appCanvas.appendChild(headerArea);
     appCanvas.appendChild(tabBar);
     appCanvas.appendChild(contentArea);
-    
-    // Mount the internal app frame to the OS-controlled container
     targetArea.appendChild(appCanvas);
 
     if (!window.TAO_HEALTH_SIGNALS_BOUND) {
         window.addEventListener('tao-global-help-clicked', async (e) => {
             if (e.detail && e.detail.appName.toLowerCase() === 'health') {
                 try {
-                    const helpMod = await import('./Health-help.js');
-                    if (helpMod.executeHelp) helpMod.executeHelp(e.detail.windowRef || targetArea);
-                } catch (err) {}
+                    // 🚀 Strictly lowercase import
+                    const helpMod = await import('./health-help.js');
+                    if (helpMod && helpMod.executeHelp) helpMod.executeHelp(e.detail.windowRef || targetArea);
+                } catch (err) {
+                    console.error('[Health] Failed to load Help module:', err);
+                }
             }
         });
 
         window.addEventListener('tao-global-snapshot-clicked', async (e) => {
             if (e.detail && e.detail.appName.toLowerCase() === 'health') {
                 try {
-                    const snapMod = await import('./Health-snapshot.js');
-                    if (snapMod.executeSnapshot) snapMod.executeSnapshot(e.detail.windowRef || targetArea);
-                } catch (err) {}
+                    // 🚀 Strictly lowercase import
+                    const snapMod = await import('./health-snapshot.js');
+                    if (snapMod && snapMod.executeSnapshot) snapMod.executeSnapshot(e.detail.windowRef || targetArea);
+                } catch (err) {
+                    console.error('[Health] Failed to load Snapshot module:', err);
+                }
             }
         });
         window.TAO_HEALTH_SIGNALS_BOUND = true;
