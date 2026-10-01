@@ -1,3 +1,5 @@
+// File: ~/extraordinaryme/backend/migrate-apps.js
+
 require('dotenv').config();
 const db = require('./db/db.js');
 
