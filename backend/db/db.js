@@ -30,38 +30,81 @@ const sanitizeUserId = (id) => (id && isValidUUID(id)) ? id : SYSTEM_UUID;
 
 /**
  * ============================================================================
- * UNIVERSAL SYSTEM LOGGER (Cloudflare R2 Routed)
+ * UNIVERSAL SYSTEM LOGGER (Cloudflare R2 Batched)
  * ============================================================================
  */
+
+let systemLogBuffer = [];
+const BUFFER_LIMIT = 100;
+const BUFFER_TIME_MS = 10 * 60 * 1000; // 10 minutes
+
+// 1. The Flush Engine
+const flushSystemLogs = async () => {
+    if (systemLogBuffer.length === 0) return;
+
+    // Isolate current logs and clear the buffer immediately to prevent race conditions
+    const logsToFlush = [...systemLogBuffer];
+    systemLogBuffer = [];
+
+    const timestamp = new Date().toISOString();
+    const today = timestamp.split('T')[0];
+
+    // Stringify the entire array of logs as one batched JSON payload
+    const logContent = JSON.stringify(logsToFlush);
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}-batch.json`;
+
+    try {
+        await uploadSystemPayload(`system_logs/${today}`, fileName, logContent, 'application/json');
+        console.log(`[Cloudflare Logger] Successfully flushed ${logsToFlush.length} logs to R2.`);
+    } catch (err) {
+        console.error('[Cloudflare Logger Error]: Failed to flush batched logs.', err.message);
+        // Optional: Reinsert the failed logs at the front of the array to try again later
+        // systemLogBuffer.unshift(...logsToFlush); 
+    }
+};
+
+// 2. The Auto-Timer Trigger
+// The .unref() ensures this timer won't keep an otherwise idle process alive
+setInterval(flushSystemLogs, BUFFER_TIME_MS).unref();
+
+// 3. The Logger Function
 const createSystemLog = async (logData) => {
     const validUserId = sanitizeUserId(logData.userId || logData.user_id);
     const modName = logData.moduleName || logData.module_name || 'system_fallback';
     const msg = logData.message || 'No message provided';
     const type = logData.type || 'info';
     
-    // Grab exact YYYY-MM-DD for the daily folder
     const timestamp = new Date().toISOString();
-    const today = timestamp.split('T')[0];
 
-    // 1. Structure the log data as a JSON payload
-    const logContent = JSON.stringify({
+    // Create the individual log entry
+    const logEntry = {
         userId: validUserId,
         module: modName,
         type: type,
         message: msg,
         timestamp: timestamp
-    });
+    };
 
-    // 2. Generate a unique filename using the exact millisecond time
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}.json`;
+    // Push into the memory buffer instead of sending immediately
+    systemLogBuffer.push(logEntry);
 
-    try {
-        // 3. Push directly to Cloudflare R2 into the absolute "system_logs" folder
-        await uploadSystemPayload(`system_logs/${today}`, fileName, logContent, 'application/json');
-    } catch (err) {
-        console.error('[Cloudflare Logger Error]: Failed to route log to bucket.', err.message);
+    // If it's a critical error, OR if we hit the 100-log threshold, flush immediately
+    if (type === 'error' || systemLogBuffer.length >= BUFFER_LIMIT) {
+        await flushSystemLogs();
     }
 };
+
+// 4. The Graceful Shutdown Interceptor
+const handleShutdown = async (signal) => {
+    console.log(`\n[System Logger] ${signal} received. Intercepting shutdown to flush logs...`);
+    await flushSystemLogs();
+    console.log('[System Logger] Flush complete. Powering down safely.');
+    process.exit(0);
+};
+
+// PM2 and standard terminal termination signals
+process.on('SIGTERM', () => handleShutdown('SIGTERM'));
+process.on('SIGINT', () => handleShutdown('SIGINT'));
 
 /**
  * ============================================================================
